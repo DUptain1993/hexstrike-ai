@@ -1,0 +1,7 @@
+<resources>
+    <color name="hex_green">#39FF88</color>
+    <color name="hex_green_dark">#1AAE5C</color>
+    <color name="hex_bg">#0B0F0D</color>
+    <color name="hex_surface">#141A17</color>
+    <color name="hex_error">#FF5C5C</color>
+</resources>

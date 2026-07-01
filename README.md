@@ -108,6 +108,15 @@ graph TD
 
 ---
 
+## Android App
+
+Looking for HexStrike AI on your phone? See [`android/README.md`](android/README.md) for a
+standalone Android client: you drop in a [Venice AI](https://venice.ai) API key and pick a model,
+and it drives the same kind of tool-calling security agent as this repo's MCP server, backed by a
+private Ubuntu (proot) Linux environment on-device — no separate server, no Termux dependency.
+
+---
+
 ## Installation
 
 ### Quick Setup to Run the hexstrike MCPs Server
