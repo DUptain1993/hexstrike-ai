@@ -56,12 +56,25 @@ object SecurityToolRegistry {
     /** Function-calling schemas to hand to Venice AI's `tools` request field. */
     fun toolDefinitions(): List<ToolDefinition> = allTools.map { it.toToolDefinition() }
 
-    /** The compact bundle offered during first-run setup: fast to install, broadly useful,
-     * all apt-native so there's no Go/pip toolchain bootstrap required first. */
+    /** The default bundle installed by Settings > "Install security tools": ~35 of the most
+     * widely used free/open-source pentesting tools, spanning network recon, web app testing,
+     * password auditing, forensics, and OSINT. Mostly apt-native for install reliability, with a
+     * handful of the most iconic Go/pip-based tools (nuclei, subfinder, amass) included too since
+     * no "top pentest tools" list is complete without them. Anything not in this set is still
+     * fully usable by the AI agent — it just installs on first use instead of during setup, or
+     * via `apt install <name>` in the Terminal tab. */
     val recommendedCoreToolIds: Set<String> = setOf(
-        "nmap", "gobuster", "dirb", "nikto", "sqlmap", "hydra", "john", "hashcat",
-        "ffuf", "wfuzz", "masscan", "enum4linux", "smbmap", "binwalk", "foremost",
-        "steghide", "exiftool", "strings", "xxd", "checksec", "radare2", "gdb",
-        "objdump", "wafw00f", "nbtscan", "arp_scan", "dnsenum",
+        // Network & port scanning
+        "nmap", "nmap_advanced", "masscan", "arp_scan",
+        // Web application
+        "gobuster", "dirb", "dirsearch", "ffuf", "wfuzz", "nikto", "nuclei", "sqlmap", "wpscan", "wafw00f",
+        // Password & authentication
+        "hydra", "john", "hashcat", "netexec", "smbmap", "enum4linux", "enum4linux_ng", "rpcclient", "nbtscan",
+        // OSINT & subdomain enumeration
+        "subfinder", "amass", "dnsenum", "fierce", "searchsploit",
+        // Binary analysis & forensics
+        "binwalk", "foremost", "steghide", "exiftool", "strings", "xxd", "checksec", "radare2", "gdb", "objdump",
     )
+
+    val recommendedCoreToolCount: Int get() = recommendedCoreToolIds.size
 }

@@ -96,22 +96,37 @@ see `native/README.md`.
    base rootfs (`cdimage.ubuntu.com/ubuntu-base`, picked automatically for the device's CPU:
    arm64/armhf/x86_64) and run baseline `apt-get install` for common prerequisites (Go, pip,
    build tools). This is optional — skip it and the app is a plain Venice AI chat client.
-4. **Chat** — ask it to do something. It'll propose tool calls; approve or deny each one (or flip
+4. **Settings → Security tools** — once the Linux environment is ready, tap "Install security
+   tools" to apt/go/pip-install a curated default set of ~38 widely used free/open-source
+   pentesting tools (nmap, sqlmap, hydra, john, hashcat, nuclei, subfinder, radare2, binwalk, and
+   more — see `SecurityToolRegistry.recommendedCoreToolIds`). Per-tool pass/fail is shown; a
+   failure doesn't block the rest, and anything that fails can be installed manually from the
+   Terminal tab. The other ~30 tools in the registry beyond this default set are still fully
+   usable by the AI agent — they just aren't pre-installed, so the first call to one of them will
+   fail with a "command not found" the agent can explain and you can fix with `apt`/`pip`/`go
+   install` in Terminal.
+5. **Chat** — ask it to do something. It'll propose tool calls; approve or deny each one (or flip
    "Auto-approve tool executions" in Settings if you trust it / are scripting a CTF box you
-   already own).
-5. **Terminal** — a raw shell into the same Ubuntu environment, e.g. to `apt install` a tool that
+   already own). While a tool is running, a foreground service notification keeps the process
+   alive if you background the app mid-scan.
+6. **Terminal** — a raw shell into the same Ubuntu environment, e.g. to `apt install` a tool that
    wasn't in the curated catalog, or to babysit a long-running scan directly.
 
 ## What's genuinely finished vs. what needs real-device follow-up
 
 Finished and should work as written: the Venice AI client (verified against the live API's actual
 response shapes during development), the settings/onboarding/chat/terminal UI, the Room-backed
-chat history, the tool-calling agent loop, and the ~68-tool registry's command construction.
+chat history, the tool-calling agent loop, the security-tools installer button, the foreground
+service that keeps long scans alive in the background, and the ~68-tool registry's command
+construction. All of this compiles cleanly and passes unit tests via the `android-build.yml`
+GitHub Actions workflow, which runs the real Android/Kotlin toolchain on every push.
 
 Needs a real device to validate, because this sandbox can't run an Android emulator or compile
-native code: the proot cross-compilation in `native/`, and the actual apt/go/pip installability of
-every tool in `data/tools/` on a real Ubuntu-on-ARM-via-proot environment — Ubuntu's official repos
-don't carry every tool `hexstrike_server.py` assumes (that project targets a Kali-like host), so
-some entries fall back to `go install`/`pip install`/upstream install scripts. Expect a handful to
-need manual `apt`/`pip` fixes in Terminal on first use; that's why tool install failures are
-non-fatal and reported individually rather than aborting the whole setup.
+native code: the proot cross-compilation in `native/` (see `native/README.md` — this is the one
+piece that genuinely cannot be finished without a machine that has the Android NDK and access to
+clone `termux/proot`), and the actual apt/go/pip installability of every tool in `data/tools/` on
+a real Ubuntu-on-ARM-via-proot environment — Ubuntu's official repos don't carry every tool
+`hexstrike_server.py` assumes (that project targets a Kali-like host), so some entries fall back to
+`go install`/`pip install`/upstream install scripts. Expect a handful to need manual `apt`/`pip`
+fixes in Terminal on first use; that's why tool install failures are non-fatal and reported
+individually rather than aborting the whole setup.

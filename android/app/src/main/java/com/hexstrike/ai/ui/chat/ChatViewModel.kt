@@ -1,12 +1,15 @@
 package com.hexstrike.ai.ui.chat
 
 import android.app.Application
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hexstrike.ai.HexStrikeApplication
 import com.hexstrike.ai.data.agent.AgentEvent
 import com.hexstrike.ai.data.agent.ApprovalRequest
 import com.hexstrike.ai.data.agent.SystemPrompt
+import com.hexstrike.ai.data.linux.LinuxSessionService
 import com.hexstrike.ai.data.settings.AppSettings
 import com.hexstrike.ai.data.venice.ChatMessage
 import kotlinx.coroutines.CompletableDeferred
@@ -54,52 +57,75 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             _isStreaming.value = true
             var currentAssistantId: String? = null
+            var toolSessionActive = false
 
-            app.agentOrchestrator.runTurn(
-                history = history,
-                settings = settings.value,
-                emit = { event ->
-                    when (event) {
-                        is AgentEvent.AssistantTextDelta -> {
-                            val id = currentAssistantId
-                            if (id == null) {
-                                val newBubbleId = newId()
-                                currentAssistantId = newBubbleId
-                                appendUi(AssistantBubble(newBubbleId, event.delta, streaming = true))
-                            } else {
-                                updateUi<AssistantBubble>(id) { it.copy(text = it.text + event.delta) }
+            try {
+                app.agentOrchestrator.runTurn(
+                    history = history,
+                    settings = settings.value,
+                    emit = { event ->
+                        when (event) {
+                            is AgentEvent.AssistantTextDelta -> {
+                                val id = currentAssistantId
+                                if (id == null) {
+                                    val newBubbleId = newId()
+                                    currentAssistantId = newBubbleId
+                                    appendUi(AssistantBubble(newBubbleId, event.delta, streaming = true))
+                                } else {
+                                    updateUi<AssistantBubble>(id) { it.copy(text = it.text + event.delta) }
+                                }
                             }
+                            is AgentEvent.AssistantMessageFinal -> {
+                                currentAssistantId?.let { id -> updateUi<AssistantBubble>(id) { it.copy(streaming = false) } }
+                                currentAssistantId = null
+                            }
+                            is AgentEvent.ToolStarted -> {
+                                if (!toolSessionActive) {
+                                    toolSessionActive = true
+                                    startToolSession()
+                                }
+                                appendUi(
+                                    ToolBubble(
+                                        id = event.callId,
+                                        toolId = event.toolId,
+                                        command = event.command,
+                                        status = if (event.requiresApproval) ToolStatus.PENDING_APPROVAL else ToolStatus.RUNNING,
+                                        output = "",
+                                    ),
+                                )
+                            }
+                            is AgentEvent.ToolOutputLine -> updateUi<ToolBubble>(event.callId) { it.copy(output = it.output + event.line + "\n") }
+                            is AgentEvent.ToolFinished -> updateUi<ToolBubble>(event.callId) {
+                                it.copy(
+                                    status = if (event.result.exitCode == 0 && !event.result.timedOut) ToolStatus.SUCCESS else ToolStatus.FAILED,
+                                    output = event.result.output,
+                                )
+                            }
+                            is AgentEvent.Error -> appendUi(SystemNotice(newId(), event.message, isError = true))
+                            AgentEvent.Done -> Unit
                         }
-                        is AgentEvent.AssistantMessageFinal -> {
-                            currentAssistantId?.let { id -> updateUi<AssistantBubble>(id) { it.copy(streaming = false) } }
-                            currentAssistantId = null
-                        }
-                        is AgentEvent.ToolStarted -> appendUi(
-                            ToolBubble(
-                                id = event.callId,
-                                toolId = event.toolId,
-                                command = event.command,
-                                status = if (event.requiresApproval) ToolStatus.PENDING_APPROVAL else ToolStatus.RUNNING,
-                                output = "",
-                            ),
-                        )
-                        is AgentEvent.ToolOutputLine -> updateUi<ToolBubble>(event.callId) { it.copy(output = it.output + event.line + "\n") }
-                        is AgentEvent.ToolFinished -> updateUi<ToolBubble>(event.callId) {
-                            it.copy(
-                                status = if (event.result.exitCode == 0 && !event.result.timedOut) ToolStatus.SUCCESS else ToolStatus.FAILED,
-                                output = event.result.output,
-                            )
-                        }
-                        is AgentEvent.Error -> appendUi(SystemNotice(newId(), event.message, isError = true))
-                        AgentEvent.Done -> Unit
-                    }
-                },
-                requestApproval = { request -> awaitApproval(request) },
-            )
+                    },
+                    requestApproval = { request -> awaitApproval(request) },
+                )
+            } finally {
+                if (toolSessionActive) stopToolSession()
+                _isStreaming.value = false
+            }
 
-            _isStreaming.value = false
             persistNewMessages()
         }
+    }
+
+    /** Keeps the process alive (with a visible notification) while a security tool runs, so
+     * Android doesn't kill a long-running nmap/sqlmap/hydra scan if the app is backgrounded. */
+    private fun startToolSession() {
+        val intent = Intent(app, LinuxSessionService::class.java)
+            .putExtra(LinuxSessionService.EXTRA_LABEL, "Running security tool…")
+        ContextCompat.startForegroundService(app, intent)
+    }
+
+    private fun stopToolSession() {
+        app.stopService(Intent(app, LinuxSessionService::class.java))
     }
 
     fun respondToApproval(approved: Boolean) {

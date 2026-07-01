@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -20,8 +23,10 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -39,6 +44,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hexstrike.ai.data.linux.LinuxEnvironmentState
+import com.hexstrike.ai.data.tools.SecurityToolRegistry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +52,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val settings by viewModel.settings.collectAsState()
     val modelsState by viewModel.modelsState.collectAsState()
     val linuxState by viewModel.linuxState.collectAsState()
+    val toolInstallRunning by viewModel.toolInstallRunning.collectAsState()
+    val toolInstallCurrent by viewModel.toolInstallCurrent.collectAsState()
+    val toolInstallResults by viewModel.toolInstallResults.collectAsState()
     var apiKeyVisible by remember { mutableStateOf(false) }
     var apiKeyField by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
     var baseUrlField by remember(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
@@ -146,6 +155,16 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             SettingsSwitchRow("Enable security tools", "Turn off for chat-only mode with no local Linux environment", settings.linuxEnvironmentEnabled, viewModel::setLinuxEnabled)
         }
         item { LinuxEnvironmentCard(linuxState, onInstall = viewModel::installLinuxEnvironment) }
+        if (linuxState == LinuxEnvironmentState.Ready) {
+            item {
+                ToolInstallCard(
+                    running = toolInstallRunning,
+                    current = toolInstallCurrent,
+                    results = toolInstallResults,
+                    onInstall = viewModel::installSecurityTools,
+                )
+            }
+        }
     }
 }
 
@@ -185,6 +204,63 @@ private fun LinuxEnvironmentCard(state: LinuxEnvironmentState, onInstall: () -> 
                 is LinuxEnvironmentState.Error -> {
                     Text("Setup failed: ${state.message}", color = MaterialTheme.colorScheme.error)
                     Button(onClick = onInstall) { Text("Retry") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolInstallCard(
+    running: Boolean,
+    current: String?,
+    results: List<ToolInstallResult>,
+    onInstall: () -> Unit,
+) {
+    val total = SecurityToolRegistry.recommendedCoreToolCount
+    val succeeded = results.count { it.success }
+    val failed = results.count { !it.success }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Security tools", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Installs $total widely used free/open-source pentesting tools (nmap, sqlmap, hydra, " +
+                    "john, nuclei, subfinder, radare2, and more) into the Linux environment via apt/go/pip.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            if (running) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text("Installing${current?.let { " $it…" } ?: "…"} (${results.size}/$total)")
+            } else if (results.isNotEmpty()) {
+                Text(
+                    "Done: $succeeded installed, $failed failed. Failures can usually be fixed with " +
+                        "`apt install <name>` in the Terminal tab.",
+                    color = if (failed == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+
+            if (results.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 180.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    results.forEach { result ->
+                        Text(
+                            "${if (result.success) "✓" else "✗"} ${result.toolId}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+
+            if (results.isEmpty() || !running) {
+                OutlinedButton(onClick = onInstall, enabled = !running) {
+                    Text(if (results.isEmpty()) "Install security tools" else "Reinstall all")
                 }
             }
         }

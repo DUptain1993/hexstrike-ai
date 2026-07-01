@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.hexstrike.ai.HexStrikeApplication
 import com.hexstrike.ai.data.linux.LinuxEnvironmentState
 import com.hexstrike.ai.data.settings.AppSettings
+import com.hexstrike.ai.data.tools.InstallProgress
+import com.hexstrike.ai.data.tools.SecurityToolRegistry
 import com.hexstrike.ai.data.venice.VeniceModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,8 @@ sealed interface ModelsLoadState {
     data class Error(val message: String) : ModelsLoadState
 }
 
+data class ToolInstallResult(val toolId: String, val success: Boolean, val message: String)
+
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app get() = getApplication<HexStrikeApplication>()
@@ -28,6 +32,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _modelsState = MutableStateFlow<ModelsLoadState>(ModelsLoadState.Idle)
     val modelsState: StateFlow<ModelsLoadState> = _modelsState.asStateFlow()
+
+    private val _toolInstallRunning = MutableStateFlow(false)
+    val toolInstallRunning: StateFlow<Boolean> = _toolInstallRunning.asStateFlow()
+
+    private val _toolInstallCurrent = MutableStateFlow<String?>(null)
+    val toolInstallCurrent: StateFlow<String?> = _toolInstallCurrent.asStateFlow()
+
+    private val _toolInstallResults = MutableStateFlow<List<ToolInstallResult>>(emptyList())
+    val toolInstallResults: StateFlow<List<ToolInstallResult>> = _toolInstallResults.asStateFlow()
 
     fun updateApiKey(key: String) = app.settingsRepository.update { it.copy(apiKey = key) }
     fun updateBaseUrl(url: String) = app.settingsRepository.update { it.copy(baseUrl = url) }
@@ -59,4 +72,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshLinuxState() = app.linuxEnvironmentRepository.refreshState()
+
+    fun installSecurityTools() {
+        if (_toolInstallRunning.value) return
+        viewModelScope.launch {
+            _toolInstallRunning.value = true
+            _toolInstallResults.value = emptyList()
+            app.toolInstaller.installTools(SecurityToolRegistry.recommendedCoreToolIds).collect { progress ->
+                when (progress) {
+                    is InstallProgress.Installing -> _toolInstallCurrent.value = progress.toolId
+                    is InstallProgress.ToolResult -> _toolInstallResults.value =
+                        _toolInstallResults.value + ToolInstallResult(progress.toolId, progress.success, progress.message)
+                    InstallProgress.Done -> {
+                        _toolInstallCurrent.value = null
+                        _toolInstallRunning.value = false
+                    }
+                }
+            }
+        }
+    }
 }
