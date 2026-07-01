@@ -159,4 +159,38 @@ val binaryForensicsTools: List<SecurityTool> = listOf(
         requiresConfirmation = false,
         params = listOf(ToolParam("hash", description = "The hash string to identify", required = true)),
     ) { a -> "hashid ${shEscape(a.getValue("hash"))}" },
+    SecurityTool(
+        id = "ghidra_headless",
+        description = "Run NSA Ghidra's headless analyzer against a binary for automated reverse engineering (disassembly, decompilation) without the GUI.",
+        category = BINARY_FORENSICS,
+        install = InstallMethod.Script(
+            listOf(
+                "apt-get install -y default-jdk",
+                "curl -L \"$(curl -s https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest | grep -o 'https://[^\"]*_PUBLIC_[0-9_]*\\.zip' | head -1)\" -o /tmp/ghidra.zip",
+                "unzip -q /tmp/ghidra.zip -d /opt && mv /opt/ghidra_* /opt/ghidra",
+            ),
+        ),
+        defaultTimeoutMs = 20 * 60 * 1000L,
+        params = listOf(
+            ToolParam("file_path", description = "Path to the binary to analyze", required = true),
+            ToolParam("additional_args", description = "Extra analyzeHeadless flags, e.g. -postScript MyScript.java", isRawFlags = true),
+        ),
+    ) { a ->
+        buildString {
+            append("mkdir -p /root/ghidra_projects && /opt/ghidra/support/analyzeHeadless /root/ghidra_projects HexStrikeProject")
+            append(" -import ${shEscape(a.getValue("file_path"))} -deleteProject")
+            a["additional_args"]?.let { append(" $it") }
+        }
+    },
+    SecurityTool(
+        id = "pwntools_eval",
+        description = "Run a short Python snippet with the pwntools exploit-development library already imported " +
+            "(process/remote/ELF/context/p32/p64/etc all in scope) — for scripted binary exploitation and CTF pwn challenges.",
+        category = BINARY_FORENSICS,
+        install = InstallMethod.Pip(listOf("pwntools")),
+        defaultTimeoutMs = 10 * 60 * 1000L,
+        params = listOf(
+            ToolParam("code", description = "Python code to run after `from pwn import *`", required = true),
+        ),
+    ) { a -> "python3 -c ${shEscape("from pwn import *\n" + a.getValue("code"))}" },
 )

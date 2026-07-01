@@ -5,7 +5,11 @@ import com.hexstrike.ai.data.tools.ToolCategory.NETWORK_RECON
 val networkTools: List<SecurityTool> = listOf(
     SecurityTool(
         id = "nmap",
-        description = "Scan a host or network for open ports, services, and versions with nmap.",
+        description = "Scan a host or network for open ports, services, and versions with nmap. Note: this " +
+            "device has no root/CAP_NET_RAW, so SYN (-sS) and UDP (-sU) scan types can't open raw sockets; " +
+            "nmap detects this automatically and falls back to an unprivileged TCP connect scan (-sT), which " +
+            "still works but is slower and more visible to the target. Leave scan_type at its default to let " +
+            "nmap pick the working mode itself.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("nmap")),
         params = listOf(
@@ -24,7 +28,9 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "nmap_advanced",
-        description = "Advanced nmap scan with NSE scripts for deeper vulnerability/service enumeration.",
+        description = "Advanced nmap scan with NSE scripts for deeper vulnerability/service enumeration. Same " +
+            "no-root caveat as the nmap tool: raw-socket scan types silently fall back to an unprivileged " +
+            "TCP connect scan on this device.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("nmap")),
         defaultTimeoutMs = 15 * 60 * 1000L,
@@ -45,7 +51,11 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "masscan",
-        description = "High-speed, Internet-scale port scanner. Use for very large port/IP ranges.",
+        description = "High-speed, Internet-scale port scanner for very large port/IP ranges. WARNING: masscan " +
+            "sends and receives raw packets directly, which requires CAP_NET_RAW/root. This device's proot " +
+            "environment fakes root for filesystem checks but doesn't grant real kernel capabilities, so " +
+            "masscan will most likely fail to open a raw socket here. Prefer nmap or rustscan (which use " +
+            "regular connect() calls) unless you've confirmed raw sockets work on this specific device.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("masscan")),
         params = listOf(
@@ -62,7 +72,9 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "rustscan",
-        description = "Very fast initial port discovery scanner, typically piped into nmap for service detection.",
+        description = "Very fast initial port discovery scanner, typically piped into nmap for service detection. " +
+            "Uses ordinary async TCP connect() calls rather than raw sockets, so unlike masscan it works fine " +
+            "without root.",
         category = NETWORK_RECON,
         install = InstallMethod.Script(
             listOf(
@@ -84,7 +96,9 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "arp_scan",
-        description = "Discover live hosts on the local network segment via ARP requests.",
+        description = "Discover live hosts on the local network segment via ARP requests. Needs a raw " +
+            "link-layer socket (CAP_NET_RAW), which this device's proot environment doesn't grant — expect " +
+            "this to fail with a permission error rather than actually scanning.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("arp-scan")),
         params = listOf(

@@ -56,24 +56,33 @@ object SecurityToolRegistry {
     /** Function-calling schemas to hand to Venice AI's `tools` request field. */
     fun toolDefinitions(): List<ToolDefinition> = allTools.map { it.toToolDefinition() }
 
-    /** The default bundle installed by Settings > "Install security tools": ~35 of the most
-     * widely used free/open-source pentesting tools, spanning network recon, web app testing,
-     * password auditing, forensics, and OSINT. Mostly apt-native for install reliability, with a
-     * handful of the most iconic Go/pip-based tools (nuclei, subfinder, amass) included too since
-     * no "top pentest tools" list is complete without them. Anything not in this set is still
-     * fully usable by the AI agent — it just installs on first use instead of during setup, or
-     * via `apt install <name>` in the Terminal tab. */
-    val recommendedCoreToolIds: Set<String> = setOf(
-        // Network & port scanning
-        "nmap", "nmap_advanced", "masscan", "arp_scan",
-        // Web application
-        "gobuster", "dirb", "dirsearch", "ffuf", "wfuzz", "nikto", "nuclei", "sqlmap", "wpscan", "wafw00f",
-        // Password & authentication
-        "hydra", "john", "hashcat", "netexec", "smbmap", "enum4linux", "enum4linux_ng", "rpcclient", "nbtscan",
-        // OSINT & subdomain enumeration
-        "subfinder", "amass", "dnsenum", "fierce", "searchsploit",
-        // Binary analysis & forensics
-        "binwalk", "foremost", "steghide", "exiftool", "strings", "xxd", "checksec", "radare2", "gdb", "objdump",
+    /** The default bundle installed by Settings > "Install security tools": 30 tools chosen
+     * specifically for what actually works **without root** inside a proot Ubuntu environment.
+     * proot fakes uid 0 for userspace checks but doesn't grant real Linux capabilities — the
+     * process still runs under the app's real (unprivileged) Android UID underneath, so anything
+     * needing CAP_NET_RAW (masscan, nmap's SYN/UDP scan types, wireless tools like aircrack-ng)
+     * either fails outright or silently degrades. This set sticks to tools that only ever need
+     * ordinary TCP/DNS/HTTP connections or pure userspace computation. nmap is kept despite that
+     * caveat because it auto-detects the lack of raw-socket privileges and falls back to an
+     * unprivileged TCP connect scan — slower, but it works and is too fundamental to drop.
+     * Anything outside this set (including masscan) is still fully usable by the AI agent; it
+     * just isn't pre-installed, and — for the raw-socket tools specifically — likely won't
+     * function correctly on-device regardless of whether it's installed. */
+    val recommendedCoreToolIds: Set<String> = linkedSetOf(
+        // Recon / OSINT
+        "theharvester", "amass", "sublist3r", "photon", "spiderfoot", "recon_ng",
+        // Web application testing
+        "sqlmap", "xsstrike", "dalfox", "wafw00f", "dirsearch", "ffuf", "wfuzz", "arjun", "crlfuzz",
+        // API / web automation
+        "newman", "httpx", "httprobe",
+        // Password & credential attacks
+        "hydra", "medusa", "patator", "cewl", "crunch",
+        // Exploitation frameworks
+        "metasploit", "routersploit", "searchsploit",
+        // Reverse engineering / binary analysis
+        "ghidra_headless", "radare2", "pwntools_eval",
+        // Network (works rootless via automatic fallback; see caveat above)
+        "nmap",
     )
 
     val recommendedCoreToolCount: Int get() = recommendedCoreToolIds.size

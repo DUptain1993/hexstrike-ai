@@ -259,4 +259,45 @@ val webAppTools: List<SecurityTool> = listOf(
             ToolParam("additional_args", description = "Extra XSSer flags", isRawFlags = true),
         ),
     ) { a -> "xsser --url ${shEscape(a.getValue("url"))} ${a["additional_args"] ?: "--auto"}".trim() },
+    SecurityTool(
+        id = "xsstrike",
+        description = "Advanced XSS detection suite with context analysis and payload generation, more precise than xsser for tricky reflections.",
+        category = WEB_APP,
+        install = InstallMethod.Script(
+            listOf(
+                "git clone https://github.com/s0md3v/XSStrike /opt/xsstrike",
+                "pip3 install --break-system-packages -r /opt/xsstrike/requirements.txt",
+            ),
+        ),
+        params = listOf(
+            ToolParam("url", description = "Target URL", required = true),
+            ToolParam("additional_args", description = "Extra XSStrike flags", isRawFlags = true),
+        ),
+    ) { a -> "python3 /opt/xsstrike/xsstrike.py -u ${shEscape(a.getValue("url"))} ${a["additional_args"] ?: "--skip-dom"}".trim() },
+    SecurityTool(
+        id = "crlfuzz",
+        description = "Scan a URL (or a list of crawled URLs) for CRLF injection vulnerabilities.",
+        category = WEB_APP,
+        install = InstallMethod.GoInstall(listOf("github.com/dwisiswant0/crlfuzz/cmd/crlfuzz")),
+        params = listOf(ToolParam("url", description = "Target URL", required = true)),
+    ) { a -> "crlfuzz -u ${shEscape(a.getValue("url"))}" },
+    SecurityTool(
+        id = "httprobe",
+        description = "Quickly check which hosts in a list are alive over HTTP/HTTPS.",
+        category = WEB_APP,
+        install = InstallMethod.GoInstall(listOf("github.com/tomnomnom/httprobe")),
+        requiresConfirmation = false,
+        params = listOf(ToolParam("host", description = "Host or domain to probe", required = true)),
+    ) { a -> "echo ${shEscape(a.getValue("host"))} | httprobe" },
+    SecurityTool(
+        id = "newman",
+        description = "Run a Postman collection from the command line for automated API security testing.",
+        category = WEB_APP,
+        install = InstallMethod.Script(listOf("apt-get install -y nodejs npm", "npm install -g newman")),
+        defaultTimeoutMs = 10 * 60 * 1000L,
+        params = listOf(
+            ToolParam("collection_path", description = "Path to the Postman collection JSON file", required = true),
+            ToolParam("additional_args", description = "Extra newman flags, e.g. --env-var key=value", isRawFlags = true),
+        ),
+    ) { a -> "newman run ${shEscape(a.getValue("collection_path"))} ${a["additional_args"] ?: ""}".trim() },
 )
