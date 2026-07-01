@@ -1,0 +1,28 @@
+# Build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+build/
+.cxx/
+captures/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local config
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+
+# Native proot sources (fetch per native/README.md instead of committing)
+native/proot/
+
+# macOS
+.DS_Store

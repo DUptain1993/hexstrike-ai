@@ -1,0 +1,51 @@
+<resources>
+    <string name="app_name">HexStrike AI</string>
+
+    <string name="onboarding_title">Authorized Use Only</string>
+    <string name="onboarding_body">HexStrike AI is a security research assistant that can run
+        network and application security tools (nmap, sqlmap, ffuf, and similar) inside a private
+        Linux environment on this device, driven by an AI model you configure.\n\nOnly use it
+        against systems you own or are explicitly authorized to test — for example your own
+        lab, a CTF target, or an engagement covered by a signed scope of work. Running scans or
+        exploitation tools against systems without authorization may be illegal in your
+        jurisdiction.\n\nYou are solely responsible for how you use this app.</string>
+    <string name="onboarding_checkbox">I have authorization to test the systems I target with this app</string>
+    <string name="onboarding_continue">Continue</string>
+
+    <string name="setup_title">Setting up Linux environment</string>
+    <string name="setup_downloading">Downloading Ubuntu base (%1$s)…</string>
+    <string name="setup_extracting">Extracting root filesystem…</string>
+    <string name="setup_configuring">Configuring environment…</string>
+    <string name="setup_ready">Linux environment ready</string>
+    <string name="setup_skip">Skip for now (chat-only mode)</string>
+    <string name="setup_retry">Retry</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_api_key">Venice AI API key</string>
+    <string name="settings_api_key_hint">Paste your key from venice.ai/settings/api</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_test_connection">Test connection</string>
+    <string name="settings_base_url">API base URL</string>
+    <string name="settings_web_search">Enable web search</string>
+    <string name="settings_strip_thinking">Hide model reasoning traces</string>
+    <string name="settings_auto_approve">Auto-approve tool executions</string>
+    <string name="settings_auto_approve_hint">When off, you confirm every command before it runs</string>
+    <string name="settings_reinstall_tools">Reinstall / repair Linux environment</string>
+    <string name="settings_section_venice">Venice AI</string>
+    <string name="settings_section_agent">Agent behavior</string>
+    <string name="settings_section_environment">Linux environment</string>
+
+    <string name="chat_input_hint">Message HexStrike AI…</string>
+    <string name="chat_new_session">New session</string>
+    <string name="chat_approve">Run</string>
+    <string name="chat_deny">Deny</string>
+    <string name="chat_pending_tool">Wants to run:</string>
+    <string name="chat_no_api_key">Add a Venice AI API key in Settings to start chatting.</string>
+
+    <string name="terminal_title">Linux Terminal</string>
+    <string name="terminal_input_hint">Enter command…</string>
+
+    <string name="nav_chat">Chat</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_settings">Settings</string>
+</resources>
