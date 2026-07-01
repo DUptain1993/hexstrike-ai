@@ -76,7 +76,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                             }
                             is AgentEvent.AssistantMessageFinal -> {
-                                currentAssistantId?.let { id -> updateUi<AssistantBubble>(id) { it.copy(streaming = false) } }
+                                currentAssistantId?.let { id ->
+                                    updateUi<AssistantBubble>(id) { it.copy(text = event.text ?: it.text, streaming = false) }
+                                }
                                 currentAssistantId = null
                             }
                             is AgentEvent.ToolStarted -> {

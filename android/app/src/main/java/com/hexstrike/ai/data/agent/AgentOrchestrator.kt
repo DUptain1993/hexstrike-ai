@@ -16,6 +16,15 @@ import com.hexstrike.ai.data.venice.VeniceRepository
  * streams the reply, and whenever the model asks for a tool call, resolves the command, asks the
  * UI to approve it (unless auto-approve is on or the tool is marked as safe), executes it, and
  * feeds the result back — repeating until the model stops requesting tools or a safety cap hits.
+ *
+ * Two tool-calling paths are supported:
+ *  - Native: the model reports function-calling support, so we use Venice's structured `tools`
+ *    request field and its `tool_calls` response field directly.
+ *  - Prompt-based: Venice rejects the whole request if `tools` is sent to a model that doesn't
+ *    support it — that's a limitation of Venice's API surface, not proof the model can't reason
+ *    about tool use — so instead we describe the tools in the system prompt and parse a
+ *    `<tool_call>{...}</tool_call>` text convention out of the reply (see
+ *    [SystemPrompt.promptBasedToolingInstructions] / [PromptToolCallParser]).
  */
 class AgentOrchestrator(
     private val venice: VeniceRepository,
@@ -28,24 +37,19 @@ class AgentOrchestrator(
         emit: (AgentEvent) -> Unit,
         requestApproval: suspend (ApprovalRequest) -> Boolean,
     ) {
+        val useNativeTools = settings.linuxEnvironmentEnabled && settings.selectedModelSupportsTools
+        val usePromptBasedTools = settings.linuxEnvironmentEnabled && !settings.selectedModelSupportsTools
+
         var iterations = 0
         while (iterations < MAX_TOOL_ITERATIONS) {
             iterations++
 
             val request = ChatCompletionRequest(
                 model = settings.selectedModel,
-                messages = history,
+                messages = if (usePromptBasedTools) withPromptToolInstructions(history) else history,
                 stream = true,
                 temperature = settings.temperature.toDouble(),
-                // Venice hard-rejects the whole request (not just the tools field) if a model
-                // that can't do function calling receives a `tools` array, so this must be
-                // gated on the selected model's actual capability, not just the user's
-                // Linux-environment toggle.
-                tools = if (settings.linuxEnvironmentEnabled && settings.selectedModelSupportsTools) {
-                    SecurityToolRegistry.toolDefinitions()
-                } else {
-                    null
-                },
+                tools = if (useNativeTools) SecurityToolRegistry.toolDefinitions() else null,
                 parallelToolCalls = false,
                 veniceParameters = VeniceParameters(
                     enableWebSearch = if (settings.enableWebSearch) "auto" else "off",
@@ -74,40 +78,91 @@ class AgentOrchestrator(
 
             val assistantMessage = accumulator.buildMessage()
             history.add(assistantMessage)
-            emit(AgentEvent.AssistantMessageFinal(assistantMessage.textOrNull()))
 
-            val toolCalls = assistantMessage.toolCalls
-            if (toolCalls.isNullOrEmpty()) {
-                emit(AgentEvent.Done)
-                return
+            val nativeToolCalls = assistantMessage.toolCalls
+            val promptToolCall = if (usePromptBasedTools && nativeToolCalls.isNullOrEmpty()) {
+                PromptToolCallParser.extract(assistantMessage.textOrNull().orEmpty())
+            } else {
+                null
             }
 
-            for (call in toolCalls) {
-                val toolId = call.function?.name ?: continue
-                val callId = call.id ?: toolId
-                val execution = toolExecutor.prepare(toolId, call.function.arguments ?: "{}")
-                val needsApproval = execution.tool?.requiresConfirmation == true &&
-                    !execution.command.startsWith("#") &&
-                    !settings.autoApproveTools
-                emit(AgentEvent.ToolStarted(callId, toolId, execution.command, needsApproval))
-                val approved = !needsApproval || requestApproval(ApprovalRequest(callId, execution))
+            val displayText = if (promptToolCall != null) {
+                PromptToolCallParser.stripToolCallBlock(assistantMessage.textOrNull().orEmpty())
+            } else {
+                assistantMessage.textOrNull()
+            }
+            emit(AgentEvent.AssistantMessageFinal(displayText))
 
-                val result = if (approved) {
-                    toolExecutor.execute(execution) { line -> emit(AgentEvent.ToolOutputLine(callId, line)) }
-                } else {
-                    ToolExecutionResult(
-                        "The user denied permission to run this command.",
-                        exitCode = -1,
-                        timedOut = false,
-                    )
+            if (!nativeToolCalls.isNullOrEmpty()) {
+                for (call in nativeToolCalls) {
+                    val toolId = call.function?.name ?: continue
+                    val callId = call.id ?: toolId
+                    val result = runTool(toolId, call.function.arguments ?: "{}", callId, settings, emit, requestApproval)
+                    history.add(ChatMessage.toolResult(callId, result.output))
                 }
-
-                emit(AgentEvent.ToolFinished(callId, toolId, result))
-                history.add(ChatMessage.toolResult(callId, result.output))
+                continue
             }
+
+            if (promptToolCall != null) {
+                val callId = "call_${iterations}_${System.nanoTime()}"
+                val result = runTool(promptToolCall.name, promptToolCall.argumentsJson, callId, settings, emit, requestApproval)
+                // Plain user-role feedback rather than the "tool" role: this whole path exists for
+                // models Venice won't let use the structured tool/function-calling machinery at
+                // all, so stick to the one message shape guaranteed to work everywhere.
+                history.add(ChatMessage.user("Tool result for ${promptToolCall.name}:\n${result.output}"))
+                continue
+            }
+
+            emit(AgentEvent.Done)
+            return
         }
 
         emit(AgentEvent.Error("Stopped after $MAX_TOOL_ITERATIONS tool calls in a row to avoid a runaway loop."))
+    }
+
+    private suspend fun runTool(
+        toolId: String,
+        argumentsJson: String,
+        callId: String,
+        settings: AppSettings,
+        emit: (AgentEvent) -> Unit,
+        requestApproval: suspend (ApprovalRequest) -> Boolean,
+    ): ToolExecutionResult {
+        val execution = toolExecutor.prepare(toolId, argumentsJson)
+        val needsApproval = execution.tool?.requiresConfirmation == true &&
+            !execution.command.startsWith("#") &&
+            !settings.autoApproveTools
+        emit(AgentEvent.ToolStarted(callId, toolId, execution.command, needsApproval))
+        val approved = !needsApproval || requestApproval(ApprovalRequest(callId, execution))
+
+        val result = if (approved) {
+            toolExecutor.execute(execution) { line -> emit(AgentEvent.ToolOutputLine(callId, line)) }
+        } else {
+            ToolExecutionResult("The user denied permission to run this command.", exitCode = -1, timedOut = false)
+        }
+        emit(AgentEvent.ToolFinished(callId, toolId, result))
+        return result
+    }
+
+    /** Appends the tool catalog + calling convention to the outgoing request's system message
+     * without mutating the persisted [history] — cheap enough to redo on every turn, and keeps
+     * the tool listing out of what actually gets saved to the chat history / sent to
+     * [SecurityToolRegistry] callers elsewhere. */
+    private fun withPromptToolInstructions(history: List<ChatMessage>): List<ChatMessage> {
+        val instructions = SystemPrompt.promptBasedToolingInstructions()
+        if (history.isEmpty()) return history
+        val first = history[0]
+        if (first.role != "system") {
+            return buildList {
+                add(ChatMessage.system(instructions))
+                addAll(history)
+            }
+        }
+        val merged = ((first.textOrNull() ?: "") + "\n\n" + instructions).trim()
+        return buildList {
+            add(ChatMessage.system(merged))
+            addAll(history.drop(1))
+        }
     }
 
     companion object {

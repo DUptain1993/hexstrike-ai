@@ -1,5 +1,7 @@
 package com.hexstrike.ai.data.agent
 
+import com.hexstrike.ai.data.tools.SecurityToolRegistry
+
 object SystemPrompt {
     val DEFAULT = """
         You are HexStrike AI, a security research assistant running on the user's own Android
@@ -22,4 +24,36 @@ object SystemPrompt {
         - Summarize raw tool output for the user; don't just dump it back verbatim unless they ask
           for the full output.
     """.trimIndent()
+
+    /**
+     * Venice AI rejects the whole request outright if `tools` is present but the selected model
+     * doesn't report native function-calling support — that's a limitation of Venice's structured
+     * tool-calling parameter, not proof the underlying model can't reason about tool use. This is
+     * the fallback for that case: describe the tools in plain text and ask for a simple text
+     * convention instead, the same general approach ReAct/MCP-style agents use for models without
+     * an official function-calling API.
+     */
+    fun promptBasedToolingInstructions(): String {
+        val toolList = SecurityToolRegistry.allTools.joinToString("\n") { tool ->
+            val shortDescription = tool.description.substringBefore(". ").trim()
+            val paramList = tool.params.joinToString(", ") { param -> if (param.required) "${param.name}*" else param.name }
+            "- ${tool.id}($paramList): $shortDescription"
+        }
+        return """
+            This model doesn't support Venice's native function-calling API, so tools are invoked
+            through plain text instead. When you need to run one, respond with ONLY the following
+            (no other text before or after it):
+
+            <tool_call>
+            {"name": "<tool_id>", "arguments": {"<param>": "<value>"}}
+            </tool_call>
+
+            Wait for the tool's result, given back to you as the next message, before continuing.
+            If you don't need a tool, just answer normally in plain text — never emit a <tool_call>
+            block unless you actually want it executed. Parameters marked with * are required.
+
+            Available tools:
+            $toolList
+        """.trimIndent()
+    }
 }
