@@ -53,9 +53,6 @@ object SecurityToolRegistry {
 
     fun byCategory(category: ToolCategory): List<SecurityTool> = allTools.filter { it.category == category }
 
-    /** Function-calling schemas to hand to Venice AI's `tools` request field. */
-    fun toolDefinitions(): List<ToolDefinition> = allTools.map { it.toToolDefinition() }
-
     /** The default bundle installed by Settings > "Install security tools": 30 tools chosen
      * specifically for what actually works **without root** inside a proot Ubuntu environment.
      * proot fakes uid 0 for userspace checks but doesn't grant real Linux capabilities — the
@@ -86,4 +83,18 @@ object SecurityToolRegistry {
     )
 
     val recommendedCoreToolCount: Int get() = recommendedCoreToolIds.size
+
+    /** Tools actually exposed to the model in a single request: the 30 curated, pre-installed-
+     * by-default tools above, plus the three generic escape-hatch tools (run_shell_command,
+     * read_file, write_file) that cover anything else via manual apt/pip/go install + invocation.
+     * This isn't just a token-budget nicety — sending the full ~84-tool catalog reproducibly
+     * triggered a hard rejection from Venice ("Invalid type for 'tools.83', expected a json
+     * object"), i.e. a real per-request tool-count ceiling somewhere around 83. Staying at 33
+     * leaves generous headroom. */
+    val activeToolIds: Set<String> = recommendedCoreToolIds + setOf("run_shell_command", "read_file", "write_file")
+
+    val activeTools: List<SecurityTool> get() = allTools.filter { it.id in activeToolIds }
+
+    /** Function-calling schemas to hand to Venice AI's `tools` request field. */
+    fun toolDefinitions(): List<ToolDefinition> = activeTools.map { it.toToolDefinition() }
 }

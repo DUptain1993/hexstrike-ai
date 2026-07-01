@@ -34,7 +34,7 @@ object SystemPrompt {
      * an official function-calling API.
      */
     fun promptBasedToolingInstructions(): String {
-        val toolList = SecurityToolRegistry.allTools.joinToString("\n") { tool ->
+        val toolList = SecurityToolRegistry.activeTools.joinToString("\n") { tool ->
             val shortDescription = tool.description.substringBefore(". ").trim()
             val paramList = tool.params.joinToString(", ") { param -> if (param.required) "${param.name}*" else param.name }
             "- ${tool.id}($paramList): $shortDescription"
