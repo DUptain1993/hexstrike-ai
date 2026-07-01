@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.converter.kotlinx.serialization.KotlinSerializationConverterFactory
 import java.util.concurrent.TimeUnit
 
 val veniceJson: Json = Json {
@@ -43,7 +43,7 @@ class VeniceClientFactory {
         return Retrofit.Builder()
             .baseUrl(normalizedBaseUrl)
             .client(httpClient)
-            .addConverterFactory(veniceJson.asConverterFactory(contentType))
+            .addConverterFactory(KotlinSerializationConverterFactory.create(veniceJson, contentType))
             .build()
             .create(VeniceApiService::class.java)
     }
