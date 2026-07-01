@@ -6,6 +6,23 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Stages proot + its two runtime deps as prebuilt Android native libs, fetched straight from
+// Termux's official package repository and checksum-verified (see scripts/fetch-proot.sh for the
+// full rationale: it's a drop-in replacement for cross-compiling proot with the NDK, which needs
+// extra native deps — talloc, libandroid-shmem — that aren't part of the NDK sysroot).
+val prootLibsDir = layout.buildDirectory.dir("generated/prootLibs")
+
+val fetchProotBinaries by tasks.registering(Exec::class) {
+    description = "Downloads prebuilt proot binaries from Termux's package repo into build/generated/prootLibs"
+    val outputDir = prootLibsDir.get().asFile
+    doFirst { outputDir.mkdirs() }
+    commandLine("bash", "${rootDir}/scripts/fetch-proot.sh", outputDir.absolutePath)
+}
+
+tasks.named("preBuild") {
+    dependsOn(fetchProotBinaries)
+}
+
 android {
     namespace = "com.hexstrike.ai"
     compileSdk = 35
@@ -21,23 +38,6 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
-
-        externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=c++_shared"
-            }
-        }
-    }
-
-    // The native/ CMake project cross-compiles proot (see native/README.md) so the
-    // Linux subsystem ships with no dependency on a separately installed Termux app.
-    // Building it requires the Android NDK; comment this block out if you only need
-    // the Venice AI chat features and want a faster first build.
-    externalNativeBuild {
-        cmake {
-            path = file("../native/CMakeLists.txt")
-            version = "3.22.1"
         }
     }
 
@@ -86,10 +86,17 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        // proot is shipped as lib*.so under jniLibs so PackageManager extracts it
-        // with the execute bit set even under Android 10+'s W^X restrictions.
+        // proot (+ libtalloc/libandroid-shmem) are shipped as lib*.so under jniLibs so
+        // PackageManager extracts them with the execute bit set even under Android 10+'s
+        // W^X restrictions. See fetchProotBinaries above and native/README.md.
         jniLibs {
             useLegacyPackaging = false
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir(prootLibsDir)
         }
     }
 

@@ -34,6 +34,9 @@ jobs:
       - name: Install required SDK packages
         run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
+      - name: Install patchelf (needed by fetchProotBinaries)
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -52,6 +55,22 @@ jobs:
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Verify proot native libs were packaged correctly
+        run: |
+          set -euo pipefail
+          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          rm -rf /tmp/apk-check && mkdir /tmp/apk-check
+          unzip -q "$apk" -d /tmp/apk-check
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            echo "=== $abi ==="
+            for lib in libproot.so libtalloc.so libandroid-shmem.so libproot_loader.so; do
+              path="/tmp/apk-check/lib/$abi/$lib"
+              [ -f "$path" ] || { echo "MISSING: $path"; exit 1; }
+              file "$path"
+            done
+          done
+          echo "All expected proot native libraries are present and valid for every ABI."
 
       - name: Upload debug APK
         if: always()

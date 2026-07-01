@@ -1,5 +1,7 @@
 package com.hexstrike.ai.data.linux
 
+import java.io.File
+
 /**
  * Builds the proot invocation used to enter the downloaded Ubuntu rootfs without root.
  * Flag choices mirror termux's proot-distro launch script, which is the reference
@@ -35,8 +37,22 @@ class ProotManager(private val paths: LinuxEnvironmentPaths) {
         }
 
         val processBuilder = ProcessBuilder(args)
+        val nativeLibDir: File? = paths.prootBinary.parentFile
         processBuilder.environment()["PROOT_TMP_DIR"] = paths.prootTmpDir.absolutePath
         processBuilder.environment()["PROOT_L2S_DIR"] = paths.prootLink2SymlinkDir.absolutePath
+        // proot is a dynamically-linked ELF (needs libtalloc.so/libandroid-shmem.so, both staged
+        // alongside it in the same jniLibs-extracted directory) and shells out to separate loader
+        // helper binaries rather than exec'ing the target directly. All three live next to
+        // libproot.so itself — see scripts/fetch-proot.sh and native/README.md.
+        if (nativeLibDir != null) {
+            processBuilder.environment()["LD_LIBRARY_PATH"] = nativeLibDir.absolutePath
+            File(nativeLibDir, "libproot_loader.so").takeIf { it.exists() }?.let {
+                processBuilder.environment()["PROOT_LOADER"] = it.absolutePath
+            }
+            File(nativeLibDir, "libproot_loader32.so").takeIf { it.exists() }?.let {
+                processBuilder.environment()["PROOT_LOADER_32"] = it.absolutePath
+            }
+        }
         processBuilder.redirectErrorStream(false)
         return processBuilder
     }

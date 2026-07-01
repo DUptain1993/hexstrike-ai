@@ -33,7 +33,7 @@ data/tools/    ~84 security tool definitions (command templates + JSON schemas) 
 data/linux/    proot + Ubuntu rootfs lifecycle: download, extract, exec, interactive terminal
 data/settings/ Encrypted, persisted user settings (API key, model, toggles)
 data/db/       Room persistence for chat history
-native/        CMake project that cross-compiles proot from source (see native/README.md)
+native/        Docs for the proot binaries; scripts/fetch-proot.sh does the actual fetching
 ```
 
 Data flow for a single user turn (`AgentOrchestrator.runTurn`):
@@ -50,34 +50,24 @@ Data flow for a single user turn (`AgentOrchestrator.runTurn`):
 
 ## Building it
 
-You need Android Studio (or just the Android SDK + NDK command-line tools) — this sandbox that
-generated the code has no Android SDK, so it has never actually been compiled; treat the first
-build as the real first compile pass.
+You need Android Studio (or just the Android SDK command-line tools) — no NDK required.
 
 ```bash
 cd android
 ./gradlew assembleDebug
 ```
 
-On a fresh checkout this builds an app where **chat works but security tools don't** (see next
-section) — that's intentional, not a bug, so you get a working APK immediately.
+That's it — no extra setup step. A `preBuild`-attached Gradle task (`fetchProotBinaries`) runs
+`scripts/fetch-proot.sh` automatically, which downloads checksummed, prebuilt `proot` binaries
+from Termux's official package repository for all three target ABIs and packages them into the
+APK. Full explanation of why prebuilt binaries instead of an NDK cross-compile, and why the
+binaries end up named `libproot.so` etc.: see `native/README.md`.
 
-### Enabling on-device tool execution (proot)
-
-`native/CMakeLists.txt` only builds a no-op stub library until you provide proot's source:
-
-```bash
-cd android/native
-git clone https://github.com/termux/proot proot   # Android-patched fork, not upstream GNU proot
-cd proot && git checkout v5.4.0                    # pick a tagged release
-git submodule update --init --recursive
-cd ../..
-./gradlew assembleDebug
-```
-
-Full explanation of why upstream proot doesn't work well on Android, why the binary is named
-`libproot.so`, and how the Ubuntu rootfs gets fetched at runtime instead of bundled in the APK:
-see `native/README.md`.
+The one thing that needs tools beyond a stock JDK: the fetch script shells out to `curl`, `ar`,
+`tar`, `sha256sum`, and `patchelf`. All five are standard on Linux/macOS dev machines and on the
+GitHub Actions `ubuntu-latest` runner this repo's CI uses; if `patchelf` specifically is missing,
+install it (`apt install patchelf` / `brew install patchelf`) — the task fails loudly rather than
+silently producing a broken build.
 
 ### Signing a release build
 
@@ -141,15 +131,19 @@ not found" or a permission error and guessing why.
 Finished and should work as written: the Venice AI client (verified against the live API's actual
 response shapes during development), the settings/onboarding/chat/terminal UI, the Room-backed
 chat history, the tool-calling agent loop, the security-tools installer button, the foreground
-service that keeps long scans alive in the background, and the ~84-tool registry's command
-construction. All of this compiles cleanly and passes unit tests via the `android-build.yml`
-GitHub Actions workflow, which runs the real Android/Kotlin toolchain on every push.
+service that keeps long scans alive in the background, the `fetchProotBinaries` Gradle task
+(verified end-to-end — download, checksum, `.deb` extraction, and `patchelf` retargeting all
+produce valid, correctly-linked ELF binaries for all three ABIs), and the ~84-tool registry's
+command construction. All of this compiles cleanly and passes unit tests via the
+`android-build.yml` GitHub Actions workflow, which runs the real Android/Kotlin toolchain on every
+push.
 
-Needs a real device to validate, because this sandbox can't run an Android emulator or compile
-native code: the proot cross-compilation in `native/` (see `native/README.md` — this is the one
-piece that genuinely cannot be finished without a machine that has the Android NDK and access to
-clone `termux/proot`), and the actual apt/go/pip installability of every tool in `data/tools/` on
-a real Ubuntu-on-ARM-via-proot environment — Ubuntu's official repos don't carry every tool
+Needs a real device to validate, because this sandbox can't run an Android emulator: whether proot
+actually chroots successfully at runtime once installed on-device (the binaries are confirmed
+valid and correctly linked, but "compiles and links" isn't the same as "a phone's kernel accepts
+the ptrace/seccomp calls it makes" — this is inherently untestable without a physical device or
+emulator), and the actual apt/go/pip installability of every tool in `data/tools/` on a real
+Ubuntu-on-ARM-via-proot environment — Ubuntu's official repos don't carry every tool
 `hexstrike_server.py` assumes (that project targets a Kali-like host), so some entries fall back to
 `go install`/`pip install`/upstream install scripts. Expect a handful to need manual `apt`/`pip`
 fixes in Terminal on first use; that's why tool install failures are non-fatal and reported
