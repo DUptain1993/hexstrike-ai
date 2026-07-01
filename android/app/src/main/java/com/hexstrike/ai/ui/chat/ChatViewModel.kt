@@ -104,6 +104,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                             }
                             is AgentEvent.Error -> appendUi(SystemNotice(newId(), event.message, isError = true))
+                            AgentEvent.ModelToolSupportRejected -> {
+                                app.settingsRepository.update { it.copy(selectedModelSupportsTools = false) }
+                                appendUi(
+                                    SystemNotice(
+                                        newId(),
+                                        "This model rejected native tool-calling, so HexStrike switched it to text-based tool calls automatically. This is remembered for next time.",
+                                        isError = false,
+                                    ),
+                                )
+                            }
                             AgentEvent.Done -> Unit
                         }
                     },

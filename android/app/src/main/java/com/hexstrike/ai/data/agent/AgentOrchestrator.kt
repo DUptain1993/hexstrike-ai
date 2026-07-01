@@ -37,12 +37,14 @@ class AgentOrchestrator(
         emit: (AgentEvent) -> Unit,
         requestApproval: suspend (ApprovalRequest) -> Boolean,
     ) {
-        val useNativeTools = settings.linuxEnvironmentEnabled && settings.selectedModelSupportsTools
-        val usePromptBasedTools = settings.linuxEnvironmentEnabled && !settings.selectedModelSupportsTools
+        var forcePromptBasedTools = false
 
         var iterations = 0
         while (iterations < MAX_TOOL_ITERATIONS) {
             iterations++
+
+            val useNativeTools = settings.linuxEnvironmentEnabled && settings.selectedModelSupportsTools && !forcePromptBasedTools
+            val usePromptBasedTools = settings.linuxEnvironmentEnabled && (!settings.selectedModelSupportsTools || forcePromptBasedTools)
 
             val request = ChatCompletionRequest(
                 model = settings.selectedModel,
@@ -72,7 +74,21 @@ class AgentOrchestrator(
             }
 
             if (streamError != null) {
-                emit(AgentEvent.Error(streamError?.message ?: "Venice AI request failed"))
+                val message = streamError?.message.orEmpty()
+                // Venice's /models endpoint can say a model supports function calling and still
+                // reject the actual `tools` field — seen twice for unrelated-looking reasons (an
+                // outright "not supported" response, and a mysterious per-request rejection
+                // despite well-formed schemas well under any documented limit). Rather than fail
+                // the whole turn on something the user can't do anything about, retry once with
+                // the text-based fallback convention and remember not to try native tools again
+                // for the rest of this turn.
+                if (useNativeTools && message.contains("tools", ignoreCase = true)) {
+                    forcePromptBasedTools = true
+                    emit(AgentEvent.ModelToolSupportRejected)
+                    iterations--
+                    continue
+                }
+                emit(AgentEvent.Error(message.ifBlank { "Venice AI request failed" }))
                 return
             }
 
