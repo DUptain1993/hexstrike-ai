@@ -37,7 +37,15 @@ class AgentOrchestrator(
                 messages = history,
                 stream = true,
                 temperature = settings.temperature.toDouble(),
-                tools = if (settings.linuxEnvironmentEnabled) SecurityToolRegistry.toolDefinitions() else null,
+                // Venice hard-rejects the whole request (not just the tools field) if a model
+                // that can't do function calling receives a `tools` array, so this must be
+                // gated on the selected model's actual capability, not just the user's
+                // Linux-environment toggle.
+                tools = if (settings.linuxEnvironmentEnabled && settings.selectedModelSupportsTools) {
+                    SecurityToolRegistry.toolDefinitions()
+                } else {
+                    null
+                },
                 parallelToolCalls = false,
                 veniceParameters = VeniceParameters(
                     enableWebSearch = if (settings.enableWebSearch) "auto" else "off",

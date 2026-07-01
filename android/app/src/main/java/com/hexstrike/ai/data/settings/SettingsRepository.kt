@@ -43,6 +43,7 @@ class SettingsRepository(context: Context) {
         apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
         baseUrl = prefs.getString(KEY_BASE_URL, AppSettings().baseUrl).orEmpty(),
         selectedModel = prefs.getString(KEY_MODEL, "").orEmpty(),
+        selectedModelSupportsTools = prefs.getBoolean(KEY_MODEL_SUPPORTS_TOOLS, AppSettings().selectedModelSupportsTools),
         temperature = prefs.getFloat(KEY_TEMPERATURE, AppSettings().temperature),
         enableWebSearch = prefs.getBoolean(KEY_WEB_SEARCH, AppSettings().enableWebSearch),
         stripThinkingResponse = prefs.getBoolean(KEY_STRIP_THINKING, AppSettings().stripThinkingResponse),
@@ -57,6 +58,7 @@ class SettingsRepository(context: Context) {
             .putString(KEY_API_KEY, s.apiKey)
             .putString(KEY_BASE_URL, s.baseUrl)
             .putString(KEY_MODEL, s.selectedModel)
+            .putBoolean(KEY_MODEL_SUPPORTS_TOOLS, s.selectedModelSupportsTools)
             .putFloat(KEY_TEMPERATURE, s.temperature)
             .putBoolean(KEY_WEB_SEARCH, s.enableWebSearch)
             .putBoolean(KEY_STRIP_THINKING, s.stripThinkingResponse)
@@ -71,6 +73,7 @@ class SettingsRepository(context: Context) {
         const val KEY_API_KEY = "venice_api_key"
         const val KEY_BASE_URL = "venice_base_url"
         const val KEY_MODEL = "venice_model"
+        const val KEY_MODEL_SUPPORTS_TOOLS = "venice_model_supports_tools"
         const val KEY_TEMPERATURE = "venice_temperature"
         const val KEY_WEB_SEARCH = "venice_web_search"
         const val KEY_STRIP_THINKING = "venice_strip_thinking"

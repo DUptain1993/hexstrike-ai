@@ -67,6 +67,16 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
+        } else if (settings.linuxEnvironmentEnabled && !settings.selectedModelSupportsTools) {
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "\"${settings.selectedModel}\" doesn't support tool calling, so this chat won't be able to run " +
+                        "security tools — pick a model with tool support in Settings for that.",
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         LazyColumn(

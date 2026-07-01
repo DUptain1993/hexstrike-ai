@@ -6,6 +6,7 @@ data class AppSettings(
     val apiKey: String = "",
     val baseUrl: String = VeniceClientFactory.DEFAULT_BASE_URL,
     val selectedModel: String = "",
+    val selectedModelSupportsTools: Boolean = true,
     val temperature: Float = 0.8f,
     val enableWebSearch: Boolean = false,
     val stripThinkingResponse: Boolean = true,

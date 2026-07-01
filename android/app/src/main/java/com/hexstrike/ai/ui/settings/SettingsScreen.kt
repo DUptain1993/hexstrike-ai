@@ -124,7 +124,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                                         )
                                     }
                                 },
-                                onClick = { viewModel.updateModel(model.id); modelMenuExpanded = false },
+                                onClick = { viewModel.updateModel(model); modelMenuExpanded = false },
                             )
                         }
                     }

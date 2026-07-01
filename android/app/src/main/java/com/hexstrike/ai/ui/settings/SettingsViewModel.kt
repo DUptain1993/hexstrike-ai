@@ -44,7 +44,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateApiKey(key: String) = app.settingsRepository.update { it.copy(apiKey = key) }
     fun updateBaseUrl(url: String) = app.settingsRepository.update { it.copy(baseUrl = url) }
-    fun updateModel(modelId: String) = app.settingsRepository.update { it.copy(selectedModel = modelId) }
+    fun updateModel(model: VeniceModel) = app.settingsRepository.update {
+        it.copy(selectedModel = model.id, selectedModelSupportsTools = model.supportsTools)
+    }
     fun updateTemperature(value: Float) = app.settingsRepository.update { it.copy(temperature = value) }
     fun setWebSearch(enabled: Boolean) = app.settingsRepository.update { it.copy(enableWebSearch = enabled) }
     fun setStripThinking(enabled: Boolean) = app.settingsRepository.update { it.copy(stripThinkingResponse = enabled) }
@@ -60,7 +62,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 .onSuccess { models ->
                     _modelsState.value = ModelsLoadState.Loaded(models.sortedByDescending { it.supportsTools })
                     if (settings.value.selectedModel.isBlank() && models.isNotEmpty()) {
-                        updateModel((models.firstOrNull { it.supportsTools } ?: models.first()).id)
+                        updateModel(models.firstOrNull { it.supportsTools } ?: models.first())
                     }
                 }
                 .onFailure { error -> _modelsState.value = ModelsLoadState.Error(error.message ?: "Failed to reach Venice AI") }
