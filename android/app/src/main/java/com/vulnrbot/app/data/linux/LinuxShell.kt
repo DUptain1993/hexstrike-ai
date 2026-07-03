@@ -37,6 +37,17 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
         packages: List<String>,
         onResult: (pkg: String, result: ExecResult) -> Unit = { _, _ -> },
     ) {
+        // A previous run's apt-get can be left running as an orphan holding
+        // /var/lib/dpkg/lock-frontend forever (see exec()'s timeout handling below for why) —
+        // that poisons every apt-get call for the rest of *this* run too, since dpkg won't even
+        // attempt an install while the lock is held. Since nothing else in this app talks to apt,
+        // any apt-get/dpkg still running at the start of a fresh batch is necessarily a stale
+        // orphan, safe to kill before clearing its lock files.
+        exec(
+            "pkill -9 -f apt-get; pkill -9 -f dpkg; " +
+                "rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; true",
+            timeoutMs = 15_000L,
+        )
         exec("dpkg --configure -a", timeoutMs = 5 * 60 * 1000L)
         exec("DEBIAN_FRONTEND=noninteractive apt-get install -f -y", timeoutMs = 5 * 60 * 1000L)
         for (pkg in packages) {
@@ -77,7 +88,21 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
         }
 
         if (completed == null) {
-            process.destroyForcibly()
+            // proot's --kill-on-exit only tears down everything it started if proot itself gets
+            // to run that cleanup - SIGKILLing proot outright (destroyForcibly) kills the
+            // supervisor instantly with no chance to do that, orphaning whatever it was
+            // ptrace-supervising (e.g. an in-progress apt-get) as a real, independent process
+            // that keeps running - and keeps holding locks like /var/lib/dpkg/lock-frontend -
+            // indefinitely. Try a graceful SIGTERM first so --kill-on-exit's own cleanup can
+            // actually run, and only fall back to SIGKILL if proot doesn't exit on its own.
+            process.destroy()
+            val exitedGracefully = withTimeoutOrNull(3_000) {
+                while (process.isAlive) delay(50)
+                true
+            }
+            if (exitedGracefully == null) {
+                process.destroyForcibly()
+            }
             readerThread.join(1_000)
             return@withContext ExecResult(exitCode = -1, output = synchronized(output) { output.toString() }, timedOut = true)
         }
