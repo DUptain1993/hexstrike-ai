@@ -19,6 +19,32 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
 
     fun isReady(): Boolean = prootManager.isAvailable()
 
+    /**
+     * Installs each package as its own `apt-get install` transaction instead of one combined
+     * call. apt-get treats a multi-package install as a single atomic transaction, so if any one
+     * package's postinst script fails (observed in practice: a python3.12/sqlmap dependency
+     * leaving dpkg with a "half-configured" package), dpkg aborts the *entire* transaction —
+     * taking down every other, otherwise-healthy package bundled into the same call. That's what
+     * turns "some tools may not exist in Ubuntu's repos" into "git/go/pip3 are missing so every
+     * git/go/pip-based tool fails" when baseline setup installs them all in one shot.
+     *
+     * Also repairs any half-configured state left over from an earlier failed attempt before
+     * starting: dpkg retries (and re-fails on) that same broken package as a precondition for
+     * every subsequent transaction until it's cleared, which otherwise poisons every later
+     * install — including a completely unrelated tool's — with the same failure.
+     */
+    suspend fun installPackagesIndividually(
+        packages: List<String>,
+        onResult: (pkg: String, result: ExecResult) -> Unit = { _, _ -> },
+    ) {
+        exec("dpkg --configure -a", timeoutMs = 5 * 60 * 1000L)
+        exec("DEBIAN_FRONTEND=noninteractive apt-get install -f -y", timeoutMs = 5 * 60 * 1000L)
+        for (pkg in packages) {
+            val result = exec("DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg", timeoutMs = 10 * 60 * 1000L)
+            onResult(pkg, result)
+        }
+    }
+
     suspend fun exec(
         shellLine: String,
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,

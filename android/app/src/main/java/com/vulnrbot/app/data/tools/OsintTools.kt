@@ -38,7 +38,16 @@ val osintTools: List<SecurityTool> = listOf(
         id = "theharvester",
         description = "Gather emails, subdomains, hosts, and employee names for a domain from public sources.",
         category = OSINT_SUBDOMAIN,
-        install = InstallMethod.Apt(listOf("theharvester")),
+        // Not an apt package on Ubuntu (confirmed: no "theharvester" package in noble's repos at
+        // all, apt fails with "Unable to locate package"). Upstream ships a modern pip-installable
+        // pyproject.toml with a "theHarvester" console-script entry point, so install straight
+        // from a clone the same way sublist3r below does.
+        install = InstallMethod.Script(
+            listOf(
+                "git clone https://github.com/laramies/theHarvester /opt/theHarvester",
+                "pip3 install --break-system-packages /opt/theHarvester",
+            ),
+        ),
         params = listOf(
             ToolParam("domain", description = "Target domain", required = true),
             ToolParam("sources", description = "Comma-separated data sources", default = "bing,crtsh,duckduckgo,hackertarget"),

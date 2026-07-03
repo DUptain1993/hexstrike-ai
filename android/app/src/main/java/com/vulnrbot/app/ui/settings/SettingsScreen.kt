@@ -260,7 +260,7 @@ private fun ToolInstallCard(
                         // with no way for anyone — user or dev — to tell *why* it failed.
                         if (!result.success && result.message.isNotBlank()) {
                             Text(
-                                result.message.trim().takeLast(200),
+                                result.message.trim().takeLast(400),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -52,7 +52,7 @@ val webAppTools: List<SecurityTool> = listOf(
         id = "feroxbuster",
         description = "Fast recursive content discovery tool written in Rust, good for large wordlists.",
         category = WEB_APP,
-        install = InstallMethod.Script(listOf("apt-get install -y feroxbuster || (curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash)")),
+        install = InstallMethod.Script(listOf("DEBIAN_FRONTEND=noninteractive apt-get install -y feroxbuster || (curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash)")),
         params = listOf(
             ToolParam("url", description = "Target URL", required = true),
             ToolParam("wordlist", description = "Wordlist path", default = "/usr/share/wordlists/dirb/common.txt"),
@@ -151,7 +151,7 @@ val webAppTools: List<SecurityTool> = listOf(
         id = "wpscan",
         description = "WordPress security scanner for vulnerable plugins, themes, users, and configuration issues.",
         category = WEB_APP,
-        install = InstallMethod.Script(listOf("apt-get install -y ruby-full && gem install wpscan")),
+        install = InstallMethod.Script(listOf("DEBIAN_FRONTEND=noninteractive apt-get install -y ruby-full && gem install wpscan")),
         params = listOf(
             ToolParam("url", description = "Target WordPress site URL", required = true),
             ToolParam("additional_args", description = "Extra wpscan flags, e.g. --enumerate p,u", isRawFlags = true),
@@ -293,7 +293,7 @@ val webAppTools: List<SecurityTool> = listOf(
         id = "newman",
         description = "Run a Postman collection from the command line for automated API security testing.",
         category = WEB_APP,
-        install = InstallMethod.Script(listOf("apt-get install -y nodejs npm", "npm install -g newman")),
+        install = InstallMethod.Script(listOf("DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm", "npm install -g newman")),
         defaultTimeoutMs = 10 * 60 * 1000L,
         params = listOf(
             ToolParam("collection_path", description = "Path to the Postman collection JSON file", required = true),

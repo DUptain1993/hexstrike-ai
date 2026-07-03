@@ -79,7 +79,7 @@ val networkTools: List<SecurityTool> = listOf(
         install = InstallMethod.Script(
             listOf(
                 "curl -fsSL https://github.com/RustScan/RustScan/releases/latest/download/rustscan_2.4.1_amd64.deb -o /tmp/rustscan.deb || true",
-                "cargo install rustscan || (apt-get install -y cargo && cargo install rustscan)",
+                "cargo install rustscan || (DEBIAN_FRONTEND=noninteractive apt-get install -y cargo && cargo install rustscan)",
             ),
         ),
         params = listOf(

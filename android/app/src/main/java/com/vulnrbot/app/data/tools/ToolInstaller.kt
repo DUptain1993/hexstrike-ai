@@ -1,5 +1,6 @@
 package com.vulnrbot.app.data.tools
 
+import com.vulnrbot.app.data.linux.LinuxEnvironmentRepository
 import com.vulnrbot.app.data.linux.LinuxShell
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -18,6 +19,16 @@ class ToolInstaller(private val shell: LinuxShell) {
 
     fun installTools(toolIds: Collection<String>): Flow<InstallProgress> = flow {
         val tools = toolIds.mapNotNull { SecurityToolRegistry.find(it) }.distinctBy { it.id }
+
+        // Repairs environments that already exist (not just fresh ones) — see
+        // LinuxShell.installPackagesIndividually. An environment set up before that fix landed
+        // can be permanently missing git/go/pip3 with no way to fix it short of wiping and
+        // re-downloading the whole rootfs; re-running this here on every "Install"/"Reinstall
+        // all" tap fixes it in place instead.
+        emit(InstallProgress.Installing("system packages (git, go, pip3, ...)", 0, tools.size))
+        shell.exec("apt-get update -y", timeoutMs = 10 * 60 * 1000L)
+        shell.installPackagesIndividually(LinuxEnvironmentRepository.BASELINE_PACKAGES)
+
         tools.forEachIndexed { index, tool ->
             emit(InstallProgress.Installing(tool.id, index + 1, tools.size))
             val command = tool.install.toShellCommand()
@@ -30,7 +41,11 @@ class ToolInstaller(private val shell: LinuxShell) {
                 InstallProgress.ToolResult(
                     toolId = tool.id,
                     success = result.exitCode == 0,
-                    message = if (result.exitCode == 0) "installed" else result.output.takeLast(400),
+                    // Keep enough to include the actual "dpkg: error processing package ..." /
+                    // "E: Unable to locate package ..." line, not just the generic boilerplate
+                    // ("Errors were encountered while processing...") that always sits at the
+                    // very end regardless of the real cause.
+                    message = if (result.exitCode == 0) "installed" else result.output.takeLast(1500),
                 ),
             )
         }

@@ -50,11 +50,17 @@ class LinuxEnvironmentRepository(context: Context) {
 
     private suspend fun runBaselineSetup() {
         shell.exec("apt-get update -y", timeoutMs = 10 * 60 * 1000)
-        shell.exec(
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y " +
-                "golang-go python3-pip python3-venv git build-essential curl wget ca-certificates " +
-                "unzip whois dnsutils net-tools",
-            timeoutMs = 15 * 60 * 1000,
+        shell.installPackagesIndividually(BASELINE_PACKAGES)
+    }
+
+    companion object {
+        /** Installed one at a time — see [LinuxShell.installPackagesIndividually] for why that
+         * matters here specifically: git/go/pip3 are load-bearing for most of the tool catalog's
+         * install commands, so a single unrelated package's postinst failure taking the whole
+         * batch down with it is worse here than almost anywhere else in the app. */
+        val BASELINE_PACKAGES = listOf(
+            "ca-certificates", "curl", "wget", "unzip", "git", "build-essential",
+            "golang-go", "python3-pip", "python3-venv", "whois", "dnsutils", "net-tools",
         )
     }
 }

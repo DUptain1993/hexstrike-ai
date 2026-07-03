@@ -165,7 +165,7 @@ val binaryForensicsTools: List<SecurityTool> = listOf(
         category = BINARY_FORENSICS,
         install = InstallMethod.Script(
             listOf(
-                "apt-get install -y default-jdk",
+                "DEBIAN_FRONTEND=noninteractive apt-get install -y default-jdk",
                 "curl -L \"$(curl -s https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest | grep -o 'https://[^\"]*_PUBLIC_[0-9_]*\\.zip' | head -1)\" -o /tmp/ghidra.zip",
                 "unzip -q /tmp/ghidra.zip -d /opt && mv /opt/ghidra_* /opt/ghidra",
             ),
