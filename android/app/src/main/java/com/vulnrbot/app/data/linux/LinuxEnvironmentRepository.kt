@@ -49,7 +49,7 @@ class LinuxEnvironmentRepository(context: Context) {
     }
 
     private suspend fun runBaselineSetup() {
-        shell.exec("apt-get update -y", timeoutMs = 10 * 60 * 1000)
+        shell.exec("apt-get update -y ${LinuxShell.LOCK_TIMEOUT_OPT}", timeoutMs = 3 * 60 * 1000L)
         shell.installPackagesIndividually(BASELINE_PACKAGES)
     }
 

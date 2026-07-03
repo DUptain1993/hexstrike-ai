@@ -48,10 +48,10 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
                 "rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; true",
             timeoutMs = 15_000L,
         )
-        exec("dpkg --configure -a", timeoutMs = 5 * 60 * 1000L)
-        exec("DEBIAN_FRONTEND=noninteractive apt-get install -f -y", timeoutMs = 5 * 60 * 1000L)
+        exec("dpkg --configure -a", timeoutMs = 2 * 60 * 1000L)
+        exec("DEBIAN_FRONTEND=noninteractive apt-get $LOCK_TIMEOUT_OPT install -f -y", timeoutMs = 3 * 60 * 1000L)
         for (pkg in packages) {
-            val result = exec("DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg", timeoutMs = 10 * 60 * 1000L)
+            val result = exec("DEBIAN_FRONTEND=noninteractive apt-get $LOCK_TIMEOUT_OPT install -y $pkg", timeoutMs = 4 * 60 * 1000L)
             onResult(pkg, result)
         }
     }
@@ -113,5 +113,16 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
 
     companion object {
         const val DEFAULT_TIMEOUT_MS = 5 * 60 * 1000L
+
+        /**
+         * Recent apt-get versions wait/retry on a contended dpkg lock by default instead of
+         * failing immediately — without this, a single stuck lock (from a leftover orphan, or a
+         * race with this same install batch's own earlier step) doesn't surface as the clear
+         * "Could not get lock" error seen in testing; it just silently eats each call's *entire*
+         * exec() timeout one command at a time. Across ~40 sequential apt-get calls in one
+         * install batch, that compounds into a hang lasting hours instead of a fast, visible
+         * failure. Bounding apt's own retry window keeps that within seconds.
+         */
+        const val LOCK_TIMEOUT_OPT = "-o DPkg::Lock::Timeout=20"
     }
 }
