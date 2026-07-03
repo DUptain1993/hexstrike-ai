@@ -1,10 +1,10 @@
 # Keep kotlinx.serialization models used for Venice AI JSON (de)serialization.
 -keepattributes *Annotation*, InnerClasses
--keep,includedescriptorclasses class com.hexstrike.ai.**$$serializer { *; }
--keepclassmembers class com.hexstrike.ai.** {
+-keep,includedescriptorclasses class com.vulnrbot.app.**$$serializer { *; }
+-keepclassmembers class com.vulnrbot.app.** {
     *** Companion;
 }
--keepclasseswithmembers class com.hexstrike.ai.** {
+-keepclasseswithmembers class com.vulnrbot.app.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
 

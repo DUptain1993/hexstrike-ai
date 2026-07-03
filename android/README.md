@@ -1,6 +1,6 @@
-# HexStrike AI — Android
+# Vulnr-Bot — Android
 
-A standalone Android client for HexStrike-style AI-driven security testing. Add a
+A standalone Android client for AI-driven security testing. Add a
 [Venice AI](https://venice.ai) API key, pick a model, and chat with an agent that can run real
 security tools (nmap, sqlmap, ffuf, hydra, and ~80 others) inside a private Ubuntu Linux
 environment on the device itself — no separate server, no Termux install required.
@@ -72,8 +72,8 @@ silently producing a broken build.
 ### Signing a release build
 
 `app/build.gradle.kts`'s release signing config reads four environment variables
-(`HEXSTRIKE_KEYSTORE_PATH`, `HEXSTRIKE_KEYSTORE_PASSWORD`, `HEXSTRIKE_KEY_ALIAS`,
-`HEXSTRIKE_KEY_PASSWORD`); without them, `assembleRelease` produces an unsigned APK.
+(`VULNRBOT_KEYSTORE_PATH`, `VULNRBOT_KEYSTORE_PASSWORD`, `VULNRBOT_KEY_ALIAS`,
+`VULNRBOT_KEY_PASSWORD`); without them, `assembleRelease` produces an unsigned APK.
 
 ## First run, from the user's side
 

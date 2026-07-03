@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.HexStrikeAI" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">@color/hex_bg</item>
-        <item name="android:navigationBarColor">@color/hex_bg</item>
+    <style name="Theme.VulnrBot" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/vulnr_bg</item>
+        <item name="android:navigationBarColor">@color/vulnr_bg</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
     </style>
 

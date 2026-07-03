@@ -24,11 +24,11 @@ tasks.named("preBuild") {
 }
 
 android {
-    namespace = "com.hexstrike.ai"
+    namespace = "com.vulnrbot.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.hexstrike.ai"
+        applicationId = "com.vulnrbot.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -43,12 +43,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("HEXSTRIKE_KEYSTORE_PATH")
+            val keystorePath = System.getenv("VULNRBOT_KEYSTORE_PATH")
             if (keystorePath != null) {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("HEXSTRIKE_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("HEXSTRIKE_KEY_ALIAS")
-                keyPassword = System.getenv("HEXSTRIKE_KEY_PASSWORD")
+                storePassword = System.getenv("VULNRBOT_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("VULNRBOT_KEY_ALIAS")
+                keyPassword = System.getenv("VULNRBOT_KEY_PASSWORD")
             }
         }
     }
@@ -58,7 +58,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (System.getenv("HEXSTRIKE_KEYSTORE_PATH") != null) {
+            if (System.getenv("VULNRBOT_KEYSTORE_PATH") != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

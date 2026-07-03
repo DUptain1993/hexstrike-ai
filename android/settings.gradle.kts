@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HexStrikeAI"
+rootProject.name = "VulnrBot"
 include(":app")

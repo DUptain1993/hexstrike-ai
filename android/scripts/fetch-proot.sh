@@ -8,7 +8,7 @@
 set -euo pipefail
 
 OUT_DIR="${1:?usage: fetch-proot.sh <output-dir> [cache-dir]}"
-CACHE_DIR="${2:-${TMPDIR:-/tmp}/hexstrike-proot-cache}"
+CACHE_DIR="${2:-${TMPDIR:-/tmp}/vulnrbot-proot-cache}"
 BASE_URL="https://packages.termux.dev/apt/termux-main/pool/main"
 
 PROOT_VERSION="5.1.107.81"

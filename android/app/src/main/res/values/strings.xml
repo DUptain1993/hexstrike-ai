@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">HexStrike AI</string>
+    <string name="app_name">Vulnr-Bot</string>
 
     <string name="onboarding_title">Authorized Use Only</string>
-    <string name="onboarding_body">HexStrike AI is a security research assistant that can run
+    <string name="onboarding_body">Vulnr-Bot is a security research assistant that can run
         network and application security tools (nmap, sqlmap, ffuf, and similar) inside a private
         Linux environment on this device, driven by an AI model you configure.\n\nOnly use it
         against systems you own or are explicitly authorized to test — for example your own
@@ -35,7 +35,7 @@
     <string name="settings_section_agent">Agent behavior</string>
     <string name="settings_section_environment">Linux environment</string>
 
-    <string name="chat_input_hint">Message HexStrike AI…</string>
+    <string name="chat_input_hint">Message Vulnr-Bot…</string>
     <string name="chat_new_session">New session</string>
     <string name="chat_approve">Run</string>
     <string name="chat_deny">Deny</string>
