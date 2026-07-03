@@ -37,11 +37,6 @@ class RootfsDownloader(private val paths: LinuxEnvironmentPaths) {
         else -> null
     }
 
-    fun rootfsUrl(release: String = DEFAULT_RELEASE): String? {
-        val arch = ubuntuArchOrNull() ?: return null
-        return "https://cdimage.ubuntu.com/ubuntu-base/releases/$release/release/ubuntu-base-$release-base-$arch.tar.gz"
-    }
-
     sealed interface Progress {
         data class Downloading(val bytesRead: Long, val totalBytes: Long) : Progress
         data object Extracting : Progress
@@ -50,9 +45,10 @@ class RootfsDownloader(private val paths: LinuxEnvironmentPaths) {
 
     fun install(release: String = DEFAULT_RELEASE): Flow<Progress> = callbackFlow {
         paths.ensureDirs()
-        val url = rootfsUrl(release) ?: throw UnsupportedOperationException(
+        val arch = ubuntuArchOrNull() ?: throw UnsupportedOperationException(
             "No Ubuntu base rootfs published for this device's CPU architecture (${Build.SUPPORTED_ABIS.joinToString()})",
         )
+        val url = resolveRootfsUrl(release, arch)
         val tarball = File(paths.downloadsDir, "ubuntu-base-$release.tar.gz")
 
         downloadTo(url, tarball) { read, total -> trySend(Progress.Downloading(read, total)) }
@@ -68,6 +64,35 @@ class RootfsDownloader(private val paths: LinuxEnvironmentPaths) {
         close()
         awaitClose { }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Ubuntu's cdimage only ever keeps the most recent point releases' tarballs in a given LTS's
+     * `release/` directory — `ubuntu-base-24.04-base-arm64.tar.gz` (no point suffix) has never
+     * been the real filename, and even a pinned `24.04.1` eventually 404s once Canonical publishes
+     * `24.04.2` and prunes the old one. There's no stable "latest" alias for ubuntu-base builds, so
+     * this fetches the directory listing and picks the highest point release actually present for
+     * this release/arch instead of guessing a filename.
+     */
+    private fun resolveRootfsUrl(release: String, arch: String): String {
+        val listingUrl = "https://cdimage.ubuntu.com/ubuntu-base/releases/$release/release/"
+        val request = Request.Builder().url(listingUrl).build()
+        val html = httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw java.io.IOException("Failed to list available Ubuntu $release rootfs builds: HTTP ${response.code}")
+            }
+            response.body?.string().orEmpty()
+        }
+        val pattern = Regex("""ubuntu-base-${Regex.escape(release)}(?:\.(\d+))?-base-${Regex.escape(arch)}\.tar\.gz""")
+        val filename = pattern.findAll(html)
+            .map { it.value to (it.groupValues[1].toIntOrNull() ?: 0) }
+            .distinct()
+            .maxByOrNull { (_, point) -> point }
+            ?.first
+            ?: throw java.io.IOException(
+                "No published Ubuntu $release base rootfs found for $arch at $listingUrl — Canonical may have moved or renamed it.",
+            )
+        return "$listingUrl$filename"
+    }
 
     private fun downloadTo(url: String, destination: File, onProgress: (Long, Long) -> Unit) {
         val request = Request.Builder().url(url).build()
