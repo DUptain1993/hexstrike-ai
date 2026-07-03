@@ -82,10 +82,10 @@ jobs:
           # entry compression is the actual mechanism, so check it directly instead of trying to
           # track AGP's merged-manifest intermediate layout, which changes across versions.
           echo "=== native lib zip compression (must be Defl:N, not Stored, to be extracted at install) ==="
-          native_lib_entries=$(unzip -v "$apk" | grep -E '^\s*[0-9]+\s+(Stored|Defl:[0-9]+)\s+.*lib/.*\.so$' || true)
+          native_lib_entries=$(unzip -v "$apk" | awk '$NF ~ /\.so$/')
           [ -n "$native_lib_entries" ] || { echo "Could not find any lib/**/*.so entries in the APK zip listing"; exit 1; }
           echo "$native_lib_entries"
-          if echo "$native_lib_entries" | grep -q 'Stored'; then
+          if echo "$native_lib_entries" | grep -qi 'Stored'; then
             echo "FAIL: one or more native libs are stored uncompressed in the APK (Stored), meaning"
             echo "they'll be mmap'd directly instead of extracted to nativeLibraryDir at install time -"
             echo "proot will silently be unavailable on real devices even though this build succeeds."
