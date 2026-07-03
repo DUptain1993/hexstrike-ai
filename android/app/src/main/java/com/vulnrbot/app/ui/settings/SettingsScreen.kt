@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -245,7 +246,7 @@ private fun ToolInstallCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 180.dp)
+                        .heightIn(max = 320.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     results.forEach { result ->
@@ -254,6 +255,18 @@ private fun ToolInstallCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         )
+                        // The actual apt/pip/go error was always captured in ToolInstallResult but
+                        // never rendered anywhere, so a failure only ever showed as a bare red name
+                        // with no way for anyone — user or dev — to tell *why* it failed.
+                        if (!result.success && result.message.isNotBlank()) {
+                            Text(
+                                result.message.trim().takeLast(200),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
+                            )
+                        }
                     }
                 }
             }
