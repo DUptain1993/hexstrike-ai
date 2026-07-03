@@ -143,6 +143,20 @@ actually chroots successfully at runtime once installed on-device (the binaries 
 valid and correctly linked, but "compiles and links" isn't the same as "a phone's kernel accepts
 the ptrace/seccomp calls it makes" — this is inherently untestable without a physical device or
 emulator), and the actual apt/go/pip installability of every tool in `data/tools/` on a real
+Ubuntu-on-ARM-via-proot environment.
+
+This real-device gap already caught one concrete bug: `packaging.jniLibs.useLegacyPackaging` was
+left at the AGP default (`false`), which stores native libs uncompressed/page-aligned *inside* the
+APK and loads them via `mmap` without ever extracting them to `applicationInfo.nativeLibraryDir` —
+so `ProotManager`'s file-existence checks failed on every real device even though the libs were
+correctly present in the APK and CI's zip-content check passed. Fixed by setting
+`useLegacyPackaging = true` so PackageManager actually extracts the libs at install time; the
+`android-build.yml` "verify proot native libs" step now also checks that every `lib/**/*.so` entry
+in the built APK's zip listing is compressed (`Defl`) rather than stored uncompressed (`Stored`) —
+that's the actual mechanism `useLegacyPackaging` controls, and it fails CI loudly instead of only
+showing up on-device. Lesson: CI proving a native lib is *inside* the APK doesn't prove it's
+*extracted at install time* — those are genuinely different checks, and the "verified
+end-to-end" claim above about `fetchProotBinaries` only ever covered the former.
 Ubuntu-on-ARM-via-proot environment — Ubuntu's official repos don't carry every tool
 `hexstrike_server.py` assumes (that project targets a Kali-like host), so some entries fall back to
 `go install`/`pip install`/upstream install scripts. Expect a handful to need manual `apt`/`pip`

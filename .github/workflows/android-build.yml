@@ -72,6 +72,28 @@ jobs:
           done
           echo "All expected proot native libraries are present and valid for every ABI."
 
+          # The check above only proves the libs exist inside the APK zip - it says nothing about
+          # whether PackageManager actually extracts them to nativeLibraryDir at install time,
+          # which is what ProotManager relies on to exec() them as subprocesses. That's controlled
+          # by packaging.jniLibs.useLegacyPackaging in app/build.gradle.kts: true stores the .so
+          # entries compressed (Defl) in the APK, which is what makes PackageManager extract them
+          # to disk at install time; the AGP default (false) stores them uncompressed (Stored) and
+          # page-aligned so the OS mmaps them straight out of the APK and never touches disk. Zip
+          # entry compression is the actual mechanism, so check it directly instead of trying to
+          # track AGP's merged-manifest intermediate layout, which changes across versions.
+          echo "=== native lib zip compression (must be Defl:N, not Stored, to be extracted at install) ==="
+          native_lib_entries=$(unzip -v "$apk" | grep -E '^\s*[0-9]+\s+(Stored|Defl:[0-9]+)\s+.*lib/.*\.so$' || true)
+          [ -n "$native_lib_entries" ] || { echo "Could not find any lib/**/*.so entries in the APK zip listing"; exit 1; }
+          echo "$native_lib_entries"
+          if echo "$native_lib_entries" | grep -q 'Stored'; then
+            echo "FAIL: one or more native libs are stored uncompressed in the APK (Stored), meaning"
+            echo "they'll be mmap'd directly instead of extracted to nativeLibraryDir at install time -"
+            echo "proot will silently be unavailable on real devices even though this build succeeds."
+            echo "Fix: set packaging { jniLibs { useLegacyPackaging = true } } in app/build.gradle.kts."
+            exit 1
+          fi
+          echo "All native libs are compressed (Defl) in the APK, consistent with extraction at install time."
+
       - name: Upload debug APK
         if: always()
         uses: actions/upload-artifact@v4

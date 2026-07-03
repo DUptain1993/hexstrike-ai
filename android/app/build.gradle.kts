@@ -86,11 +86,15 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        // proot (+ libtalloc/libandroid-shmem) are shipped as lib*.so under jniLibs so
-        // PackageManager extracts them with the execute bit set even under Android 10+'s
-        // W^X restrictions. See fetchProotBinaries above and native/README.md.
+        // proot (+ libtalloc/libandroid-shmem) are shipped as lib*.so under jniLibs and run as
+        // real subprocesses via ProcessBuilder, not loaded with System.loadLibrary. That needs
+        // an actual extracted file on disk with the execute bit set — useLegacyPackaging = true
+        // is what makes PackageManager extract native libs to nativeLibraryDir at install time.
+        // The default (false) stores them uncompressed/page-aligned *inside* the APK and loads
+        // them via mmap without ever extracting them, which leaves nativeLibraryDir empty and
+        // makes every proot path check fail on real devices despite the APK containing the libs.
         jniLibs {
-            useLegacyPackaging = false
+            useLegacyPackaging = true
         }
     }
 
