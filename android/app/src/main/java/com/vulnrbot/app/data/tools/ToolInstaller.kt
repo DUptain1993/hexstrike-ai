@@ -11,7 +11,7 @@ sealed interface InstallProgress {
     data object Done : InstallProgress
 }
 
-/** Installs security tools into the proot Ubuntu environment. Failures for one tool don't stop
+/** Installs security tools into the on-device Ubuntu chroot. Failures for one tool don't stop
  * the rest — Kali-adjacent tools aren't all guaranteed to exist in plain Ubuntu's repositories,
  * so partial success is the expected common case; the Terminal screen lets a user finish any tool
  * manually afterward. */
@@ -30,11 +30,9 @@ class ToolInstaller(private val shell: LinuxShell) {
         // part of the run always finishes in bounded time either way.
         val deadline = System.currentTimeMillis() + OVERALL_BUDGET_MS
 
-        // Repairs environments that already exist (not just fresh ones) — see
-        // LinuxShell.installPackagesIndividually. An environment set up before that fix landed
-        // can be permanently missing git/go/pip3 with no way to fix it short of wiping and
-        // re-downloading the whole rootfs; re-running this here on every "Install"/"Reinstall
-        // all" tap fixes it in place instead.
+        // Always (re)install the baseline packages first: git/go/pip3/etc. are load-bearing for
+        // most tools' install commands, and running them here on every "Install"/"Reinstall all"
+        // tap makes the flow self-healing if the chroot is missing any of them.
         emit(InstallProgress.Installing("system packages (git, go, pip3, ...)", 0, tools.size))
         shell.exec("apt-get update -y ${LinuxShell.LOCK_TIMEOUT_OPT}", timeoutMs = 3 * 60 * 1000L)
         shell.installPackagesIndividually(LinuxEnvironmentRepository.BASELINE_PACKAGES)

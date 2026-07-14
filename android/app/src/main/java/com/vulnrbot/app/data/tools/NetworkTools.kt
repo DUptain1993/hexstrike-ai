@@ -5,11 +5,9 @@ import com.vulnrbot.app.data.tools.ToolCategory.NETWORK_RECON
 val networkTools: List<SecurityTool> = listOf(
     SecurityTool(
         id = "nmap",
-        description = "Scan a host or network for open ports, services, and versions with nmap. Note: this " +
-            "device has no root/CAP_NET_RAW, so SYN (-sS) and UDP (-sU) scan types can't open raw sockets; " +
-            "nmap detects this automatically and falls back to an unprivileged TCP connect scan (-sT), which " +
-            "still works but is slower and more visible to the target. Leave scan_type at its default to let " +
-            "nmap pick the working mode itself.",
+        description = "Scan a host or network for open ports, services, and versions with nmap. Runs as real " +
+            "root in the chroot, so raw-socket scan types (SYN -sS, UDP -sU) work in addition to the TCP " +
+            "connect scan (-sT). -sS is the faster, stealthier default for most scans.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("nmap")),
         params = listOf(
@@ -28,9 +26,8 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "nmap_advanced",
-        description = "Advanced nmap scan with NSE scripts for deeper vulnerability/service enumeration. Same " +
-            "no-root caveat as the nmap tool: raw-socket scan types silently fall back to an unprivileged " +
-            "TCP connect scan on this device.",
+        description = "Advanced nmap scan with NSE scripts for deeper vulnerability/service enumeration. Runs as " +
+            "real root in the chroot, so raw-socket scan types and privileged NSE scripts work.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("nmap")),
         defaultTimeoutMs = 15 * 60 * 1000L,
@@ -51,11 +48,9 @@ val networkTools: List<SecurityTool> = listOf(
     },
     SecurityTool(
         id = "masscan",
-        description = "High-speed, Internet-scale port scanner for very large port/IP ranges. WARNING: masscan " +
-            "sends and receives raw packets directly, which requires CAP_NET_RAW/root. This device's proot " +
-            "environment fakes root for filesystem checks but doesn't grant real kernel capabilities, so " +
-            "masscan will most likely fail to open a raw socket here. Prefer nmap or rustscan (which use " +
-            "regular connect() calls) unless you've confirmed raw sockets work on this specific device.",
+        description = "High-speed, Internet-scale port scanner for very large port/IP ranges. Sends raw packets " +
+            "(needs CAP_NET_RAW), which works here because the chroot runs as real root — unlike the old proot " +
+            "setup. Still bandwidth-heavy; keep --rate modest on shared networks.",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("masscan")),
         params = listOf(
@@ -97,8 +92,8 @@ val networkTools: List<SecurityTool> = listOf(
     SecurityTool(
         id = "arp_scan",
         description = "Discover live hosts on the local network segment via ARP requests. Needs a raw " +
-            "link-layer socket (CAP_NET_RAW), which this device's proot environment doesn't grant — expect " +
-            "this to fail with a permission error rather than actually scanning.",
+            "link-layer socket (CAP_NET_RAW); this works now that the chroot runs as real root, though it " +
+            "still depends on the Android device exposing a usable network interface (e.g. wlan0).",
         category = NETWORK_RECON,
         install = InstallMethod.Apt(listOf("arp-scan")),
         params = listOf(

@@ -41,7 +41,7 @@ class VulnrBotApplication : Application() {
 
         settingsRepository = SettingsRepository(this)
         veniceRepository = VeniceRepository()
-        linuxEnvironmentRepository = LinuxEnvironmentRepository(this)
+        linuxEnvironmentRepository = LinuxEnvironmentRepository(settingsRepository, applicationScope)
         toolExecutor = ToolExecutor(linuxEnvironmentRepository.shell)
         toolInstaller = ToolInstaller(linuxEnvironmentRepository.shell)
         agentOrchestrator = AgentOrchestrator(veniceRepository, toolExecutor)

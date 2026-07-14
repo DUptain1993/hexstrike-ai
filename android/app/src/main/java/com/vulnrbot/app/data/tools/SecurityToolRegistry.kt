@@ -53,18 +53,12 @@ object SecurityToolRegistry {
 
     fun byCategory(category: ToolCategory): List<SecurityTool> = allTools.filter { it.category == category }
 
-    /** The default bundle installed by Settings > "Install security tools": 30 tools chosen
-     * specifically for what actually works **without root** inside a proot Ubuntu environment.
-     * proot fakes uid 0 for userspace checks but doesn't grant real Linux capabilities — the
-     * process still runs under the app's real (unprivileged) Android UID underneath, so anything
-     * needing CAP_NET_RAW (masscan, nmap's SYN/UDP scan types, wireless tools like aircrack-ng)
-     * either fails outright or silently degrades. This set sticks to tools that only ever need
-     * ordinary TCP/DNS/HTTP connections or pure userspace computation. nmap is kept despite that
-     * caveat because it auto-detects the lack of raw-socket privileges and falls back to an
-     * unprivileged TCP connect scan — slower, but it works and is too fundamental to drop.
-     * Anything outside this set (including masscan) is still fully usable by the AI agent; it
-     * just isn't pre-installed, and — for the raw-socket tools specifically — likely won't
-     * function correctly on-device regardless of whether it's installed. */
+    /** The default bundle installed by Settings > "Install security tools": 30 widely used tools
+     * spanning recon/OSINT, web-app testing, credential attacks, exploitation, and reverse
+     * engineering. The environment now runs as **real root** in an on-device Ubuntu chroot, so
+     * raw-socket tools (masscan, nmap SYN/UDP, arp-scan) work too — this set is just a sensible,
+     * broadly-useful default, not a rootless-only subset. Anything outside it is still fully usable
+     * by the AI agent; it simply isn't pre-installed. */
     val recommendedCoreToolIds: Set<String> = linkedSetOf(
         // Recon / OSINT
         "theharvester", "amass", "sublist3r", "photon", "spiderfoot", "recon_ng",
@@ -78,7 +72,7 @@ object SecurityToolRegistry {
         "metasploit", "routersploit", "searchsploit",
         // Reverse engineering / binary analysis
         "ghidra_headless", "radare2", "pwntools_eval",
-        // Network (works rootless via automatic fallback; see caveat above)
+        // Network
         "nmap",
     )
 

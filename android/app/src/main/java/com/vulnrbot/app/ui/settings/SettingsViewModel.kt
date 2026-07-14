@@ -42,6 +42,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _toolInstallResults = MutableStateFlow<List<ToolInstallResult>>(emptyList())
     val toolInstallResults: StateFlow<List<ToolInstallResult>> = _toolInstallResults.asStateFlow()
 
+    private val _diagnostics = MutableStateFlow<String?>(null)
+    val diagnostics: StateFlow<String?> = _diagnostics.asStateFlow()
+
+    private val _diagnosticsRunning = MutableStateFlow(false)
+    val diagnosticsRunning: StateFlow<Boolean> = _diagnosticsRunning.asStateFlow()
+
     fun updateApiKey(key: String) = app.settingsRepository.update { it.copy(apiKey = key) }
     fun updateBaseUrl(url: String) = app.settingsRepository.update { it.copy(baseUrl = url) }
     fun updateModel(model: VeniceModel) = app.settingsRepository.update {
@@ -52,7 +58,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setStripThinking(enabled: Boolean) = app.settingsRepository.update { it.copy(stripThinkingResponse = enabled) }
     fun setAutoApprove(enabled: Boolean) = app.settingsRepository.update { it.copy(autoApproveTools = enabled) }
     fun setLinuxEnabled(enabled: Boolean) = app.settingsRepository.update { it.copy(linuxEnvironmentEnabled = enabled) }
+    fun updateChrootPath(path: String) = app.settingsRepository.update { it.copy(chrootPath = path) }
     fun completeOnboarding() = app.settingsRepository.update { it.copy(onboardingCompleted = true) }
+
+    fun testRootAndChroot() {
+        if (_diagnosticsRunning.value) return
+        viewModelScope.launch {
+            _diagnosticsRunning.value = true
+            _diagnostics.value = "Running…"
+            _diagnostics.value = runCatching { app.linuxEnvironmentRepository.testRootAndChroot() }
+                .getOrElse { "Diagnostic failed: ${it.message}" }
+            _diagnosticsRunning.value = false
+            app.linuxEnvironmentRepository.refreshState()
+        }
+    }
 
     fun testConnectionAndLoadModels() {
         viewModelScope.launch {

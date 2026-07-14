@@ -13,6 +13,7 @@ data class AppSettings(
     val autoApproveTools: Boolean = false,
     val onboardingCompleted: Boolean = false,
     val linuxEnvironmentEnabled: Boolean = true,
+    val chrootPath: String = "/data/local/chroot/ubuntu",
     val verboseNetworkLogging: Boolean = false,
 ) {
     val hasApiKey: Boolean get() = apiKey.isNotBlank()

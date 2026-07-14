@@ -1,6 +1,8 @@
 package com.vulnrbot.app.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -56,9 +59,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val toolInstallRunning by viewModel.toolInstallRunning.collectAsState()
     val toolInstallCurrent by viewModel.toolInstallCurrent.collectAsState()
     val toolInstallResults by viewModel.toolInstallResults.collectAsState()
+    val diagnostics by viewModel.diagnostics.collectAsState()
+    val diagnosticsRunning by viewModel.diagnosticsRunning.collectAsState()
     var apiKeyVisible by remember { mutableStateOf(false) }
     var apiKeyField by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
     var baseUrlField by remember(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
+    var chrootPathField by remember(settings.chrootPath) { mutableStateOf(settings.chrootPath) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -155,7 +161,27 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         item {
             SettingsSwitchRow("Enable security tools", "Turn off for chat-only mode with no local Linux environment", settings.linuxEnvironmentEnabled, viewModel::setLinuxEnabled)
         }
-        item { LinuxEnvironmentCard(linuxState, onInstall = viewModel::installLinuxEnvironment) }
+        item {
+            OutlinedTextField(
+                value = chrootPathField,
+                onValueChange = { chrootPathField = it; viewModel.updateChrootPath(it) },
+                label = { Text("Ubuntu chroot path") },
+                placeholder = { Text("/data/local/chroot/ubuntu") },
+                singleLine = true,
+                supportingText = { Text("Path to your existing rooted chroot on the device.") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            RootChrootCard(
+                state = linuxState,
+                diagnostics = diagnostics,
+                diagnosticsRunning = diagnosticsRunning,
+                onTest = viewModel::testRootAndChroot,
+                onRecheck = viewModel::refreshLinuxState,
+                onPrepare = viewModel::installLinuxEnvironment,
+            )
+        }
         if (linuxState == LinuxEnvironmentState.Ready) {
             item {
                 ToolInstallCard(
@@ -184,27 +210,58 @@ private fun SettingsSwitchRow(title: String, subtitle: String, checked: Boolean,
 }
 
 @Composable
-private fun LinuxEnvironmentCard(state: LinuxEnvironmentState, onInstall: () -> Unit) {
+private fun RootChrootCard(
+    state: LinuxEnvironmentState,
+    diagnostics: String?,
+    diagnosticsRunning: Boolean,
+    onTest: () -> Unit,
+    onRecheck: () -> Unit,
+    onPrepare: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (state) {
-                LinuxEnvironmentState.Unavailable -> Text(
-                    "Not built into this APK. See native/README.md to cross-compile proot; until then, security tools are unavailable and chat still works.",
+                LinuxEnvironmentState.CheckingRoot -> Row {
+                    CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).heightIn(max = 20.dp))
+                    Text("Checking root & chroot…")
+                }
+                LinuxEnvironmentState.NeedsRoot -> Text(
+                    "Root not available. This build runs its tools inside your existing rooted Ubuntu chroot, " +
+                        "so it needs root. Grant this app root in your superuser manager (Magisk/KernelSU), then re-check.",
+                    color = MaterialTheme.colorScheme.error,
                 )
-                LinuxEnvironmentState.NotInstalled -> {
-                    Text("Ubuntu environment not installed yet (~150-400MB download).")
-                    Button(onClick = onInstall) { Text("Install now") }
+                is LinuxEnvironmentState.ChrootNotFound -> Text(
+                    "Root works, but no Ubuntu chroot was found at ${state.path} (no bin/bash there). " +
+                        "Fix the path above, or set up the chroot on the device first.",
+                    color = MaterialTheme.colorScheme.error,
+                )
+                LinuxEnvironmentState.Preparing -> Row {
+                    CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).heightIn(max = 20.dp))
+                    Text("Installing baseline packages in the chroot…")
                 }
-                is LinuxEnvironmentState.Downloading -> {
-                    val pct = if (state.totalBytes > 0) (state.bytesRead * 100 / state.totalBytes).toInt() else 0
-                    Text("Downloading Ubuntu base… $pct%")
+                LinuxEnvironmentState.Ready -> Text(
+                    "Ready — root granted and chroot found. Tools run as real root inside your chroot.",
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                is LinuxEnvironmentState.Error -> Text("Setup failed: ${state.message}", color = MaterialTheme.colorScheme.error)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onTest, enabled = !diagnosticsRunning) { Text("Test root & chroot") }
+                OutlinedButton(onClick = onRecheck) { Text("Re-check") }
+                if (state == LinuxEnvironmentState.Ready) {
+                    OutlinedButton(onClick = onPrepare) { Text("Run baseline setup") }
                 }
-                LinuxEnvironmentState.Extracting -> Text("Extracting root filesystem…")
-                LinuxEnvironmentState.Configuring -> Text("Installing baseline packages…")
-                LinuxEnvironmentState.Ready -> Text("Ready. Reinstall packages any time from the Terminal tab with apt.", color = MaterialTheme.colorScheme.primary)
-                is LinuxEnvironmentState.Error -> {
-                    Text("Setup failed: ${state.message}", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = onInstall) { Text("Retry") }
+            }
+
+            if (diagnostics != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                ) {
+                    Text(diagnostics, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

@@ -34,9 +34,6 @@ jobs:
       - name: Install required SDK packages
         run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      - name: Install patchelf (needed by fetchProotBinaries)
-        run: sudo apt-get update && sudo apt-get install -y patchelf
-
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -55,44 +52,6 @@ jobs:
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
-
-      - name: Verify proot native libs were packaged correctly
-        run: |
-          set -euo pipefail
-          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
-          rm -rf /tmp/apk-check && mkdir /tmp/apk-check
-          unzip -q "$apk" -d /tmp/apk-check
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            echo "=== $abi ==="
-            for lib in libproot.so libtalloc.so libandroid-shmem.so libproot_loader.so; do
-              path="/tmp/apk-check/lib/$abi/$lib"
-              [ -f "$path" ] || { echo "MISSING: $path"; exit 1; }
-              file "$path"
-            done
-          done
-          echo "All expected proot native libraries are present and valid for every ABI."
-
-          # The check above only proves the libs exist inside the APK zip - it says nothing about
-          # whether PackageManager actually extracts them to nativeLibraryDir at install time,
-          # which is what ProotManager relies on to exec() them as subprocesses. That's controlled
-          # by packaging.jniLibs.useLegacyPackaging in app/build.gradle.kts: true stores the .so
-          # entries compressed (Defl) in the APK, which is what makes PackageManager extract them
-          # to disk at install time; the AGP default (false) stores them uncompressed (Stored) and
-          # page-aligned so the OS mmaps them straight out of the APK and never touches disk. Zip
-          # entry compression is the actual mechanism, so check it directly instead of trying to
-          # track AGP's merged-manifest intermediate layout, which changes across versions.
-          echo "=== native lib zip compression (must be Defl:N, not Stored, to be extracted at install) ==="
-          native_lib_entries=$(unzip -v "$apk" | awk '$NF ~ /\.so$/')
-          [ -n "$native_lib_entries" ] || { echo "Could not find any lib/**/*.so entries in the APK zip listing"; exit 1; }
-          echo "$native_lib_entries"
-          if echo "$native_lib_entries" | grep -qi 'Stored'; then
-            echo "FAIL: one or more native libs are stored uncompressed in the APK (Stored), meaning"
-            echo "they'll be mmap'd directly instead of extracted to nativeLibraryDir at install time -"
-            echo "proot will silently be unavailable on real devices even though this build succeeds."
-            echo "Fix: set packaging { jniLibs { useLegacyPackaging = true } } in app/build.gradle.kts."
-            exit 1
-          fi
-          echo "All native libs are compressed (Defl) in the APK, consistent with extraction at install time."
 
       - name: Upload debug APK
         if: always()

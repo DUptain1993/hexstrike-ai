@@ -50,6 +50,7 @@ class SettingsRepository(context: Context) {
         autoApproveTools = prefs.getBoolean(KEY_AUTO_APPROVE, AppSettings().autoApproveTools),
         onboardingCompleted = prefs.getBoolean(KEY_ONBOARDING, false),
         linuxEnvironmentEnabled = prefs.getBoolean(KEY_LINUX_ENABLED, true),
+        chrootPath = prefs.getString(KEY_CHROOT_PATH, AppSettings().chrootPath).orEmpty(),
         verboseNetworkLogging = prefs.getBoolean(KEY_VERBOSE_LOGGING, false),
     )
 
@@ -65,6 +66,7 @@ class SettingsRepository(context: Context) {
             .putBoolean(KEY_AUTO_APPROVE, s.autoApproveTools)
             .putBoolean(KEY_ONBOARDING, s.onboardingCompleted)
             .putBoolean(KEY_LINUX_ENABLED, s.linuxEnvironmentEnabled)
+            .putString(KEY_CHROOT_PATH, s.chrootPath)
             .putBoolean(KEY_VERBOSE_LOGGING, s.verboseNetworkLogging)
             .apply()
     }
@@ -80,6 +82,7 @@ class SettingsRepository(context: Context) {
         const val KEY_AUTO_APPROVE = "agent_auto_approve"
         const val KEY_ONBOARDING = "onboarding_completed"
         const val KEY_LINUX_ENABLED = "linux_environment_enabled"
+        const val KEY_CHROOT_PATH = "chroot_path"
         const val KEY_VERBOSE_LOGGING = "verbose_network_logging"
     }
 }

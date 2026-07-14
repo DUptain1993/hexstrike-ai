@@ -6,22 +6,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// Stages proot + its two runtime deps as prebuilt Android native libs, fetched straight from
-// Termux's official package repository and checksum-verified (see scripts/fetch-proot.sh for the
-// full rationale: it's a drop-in replacement for cross-compiling proot with the NDK, which needs
-// extra native deps — talloc, libandroid-shmem — that aren't part of the NDK sysroot).
-val prootLibsDir = layout.buildDirectory.dir("generated/prootLibs")
-
-val fetchProotBinaries by tasks.registering(Exec::class) {
-    description = "Downloads prebuilt proot binaries from Termux's package repo into build/generated/prootLibs"
-    val outputDir = prootLibsDir.get().asFile
-    doFirst { outputDir.mkdirs() }
-    commandLine("bash", "${rootDir}/scripts/fetch-proot.sh", outputDir.absolutePath)
-}
-
-tasks.named("preBuild") {
-    dependsOn(fetchProotBinaries)
-}
+// The on-device Linux environment is an existing rooted Ubuntu chroot entered via `su` at runtime
+// (see data/linux/ChrootManager.kt) — no bundled proot binary, no native libs, no rootfs download.
 
 android {
     namespace = "com.vulnrbot.app"
@@ -35,10 +21,6 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
     }
 
     signingConfigs {
@@ -85,22 +67,6 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-        // proot (+ libtalloc/libandroid-shmem) are shipped as lib*.so under jniLibs and run as
-        // real subprocesses via ProcessBuilder, not loaded with System.loadLibrary. That needs
-        // an actual extracted file on disk with the execute bit set — useLegacyPackaging = true
-        // is what makes PackageManager extract native libs to nativeLibraryDir at install time.
-        // The default (false) stores them uncompressed/page-aligned *inside* the APK and loads
-        // them via mmap without ever extracting them, which leaves nativeLibraryDir empty and
-        // makes every proot path check fail on real devices despite the APK containing the libs.
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
-
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDir(prootLibsDir)
         }
     }
 

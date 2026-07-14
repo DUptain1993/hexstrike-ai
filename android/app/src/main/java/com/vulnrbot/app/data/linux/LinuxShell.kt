@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 
 data class ExecResult(
     val exitCode: Int,
@@ -11,38 +12,29 @@ data class ExecResult(
     val timedOut: Boolean = false,
 )
 
-/** One-shot command execution inside the proot Ubuntu environment, used by tool execution and
- * the environment installer. For an interactive shell see [LinuxInteractiveSession]. */
-class LinuxShell(paths: LinuxEnvironmentPaths) {
+/** One-shot command execution inside the on-device Ubuntu chroot (as real root, via
+ * [ChrootManager]). Used by tool execution and the environment installer. For an interactive shell
+ * see [LinuxInteractiveSession]. */
+class LinuxShell(private val chroot: ChrootManager) {
 
-    private val prootManager = ProotManager(paths)
-
-    fun isReady(): Boolean = prootManager.isAvailable()
+    /** True once root + a usable chroot have been confirmed; refreshes on first use if never
+     * checked, so callers that run before Settings has probed still work. */
+    suspend fun isReady(): Boolean = chroot.lastReady || chroot.refreshReadiness()
 
     /**
      * Installs each package as its own `apt-get install` transaction instead of one combined
      * call. apt-get treats a multi-package install as a single atomic transaction, so if any one
-     * package's postinst script fails (observed in practice: a python3.12/sqlmap dependency
-     * leaving dpkg with a "half-configured" package), dpkg aborts the *entire* transaction —
-     * taking down every other, otherwise-healthy package bundled into the same call. That's what
-     * turns "some tools may not exist in Ubuntu's repos" into "git/go/pip3 are missing so every
-     * git/go/pip-based tool fails" when baseline setup installs them all in one shot.
+     * package's postinst script fails, dpkg aborts the *entire* transaction — taking down every
+     * other, otherwise-healthy package bundled into the same call.
      *
-     * Also repairs any half-configured state left over from an earlier failed attempt before
-     * starting: dpkg retries (and re-fails on) that same broken package as a precondition for
-     * every subsequent transaction until it's cleared, which otherwise poisons every later
-     * install — including a completely unrelated tool's — with the same failure.
+     * Also clears any stale dpkg lock / half-configured state left by an earlier attempt before
+     * starting. Under real root (unlike proot) the pkill actually reaps the host process holding
+     * the lock, and the lock-file removal is authoritative.
      */
     suspend fun installPackagesIndividually(
         packages: List<String>,
         onResult: (pkg: String, result: ExecResult) -> Unit = { _, _ -> },
     ) {
-        // A previous run's apt-get can be left running as an orphan holding
-        // /var/lib/dpkg/lock-frontend forever (see exec()'s timeout handling below for why) —
-        // that poisons every apt-get call for the rest of *this* run too, since dpkg won't even
-        // attempt an install while the lock is held. Since nothing else in this app talks to apt,
-        // any apt-get/dpkg still running at the start of a fresh batch is necessarily a stale
-        // orphan, safe to kill before clearing its lock files.
         exec(
             "pkill -9 -f apt-get; pkill -9 -f dpkg; " +
                 "rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; true",
@@ -64,11 +56,13 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
         if (!isReady()) {
             return@withContext ExecResult(
                 exitCode = -1,
-                output = "Linux environment is not installed yet. Set it up from Settings first.",
+                output = "The on-device Linux environment isn't ready: this device needs root and a chroot at " +
+                    "${chroot.chrootPath()}. Check Settings > Linux environment.",
             )
         }
 
-        val process = prootManager.buildProcessBuilder(prootManager.shellCommand(shellLine))
+        val jobId = "vulnrjob_" + UUID.randomUUID().toString().replace("-", "")
+        val process = ProcessBuilder(chroot.oneShotArgv(shellLine, jobId))
             .redirectErrorStream(true)
             .start()
 
@@ -88,13 +82,10 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
         }
 
         if (completed == null) {
-            // proot's --kill-on-exit only tears down everything it started if proot itself gets
-            // to run that cleanup - SIGKILLing proot outright (destroyForcibly) kills the
-            // supervisor instantly with no chance to do that, orphaning whatever it was
-            // ptrace-supervising (e.g. an in-progress apt-get) as a real, independent process
-            // that keeps running - and keeps holding locks like /var/lib/dpkg/lock-frontend -
-            // indefinitely. Try a graceful SIGTERM first so --kill-on-exit's own cleanup can
-            // actually run, and only fall back to SIGKILL if proot doesn't exit on its own.
+            // Killing the `su` process alone won't reap the chrooted grandchildren (chroot doesn't
+            // create a process group), so ask root to kill the job's bash by its JOBID marker plus
+            // any apt/dpkg it spawned (the long-running lock-holders) before tearing down su itself.
+            chroot.killJob(jobId)
             process.destroy()
             val exitedGracefully = withTimeoutOrNull(3_000) {
                 while (process.isAlive) delay(50)
@@ -114,15 +105,8 @@ class LinuxShell(paths: LinuxEnvironmentPaths) {
     companion object {
         const val DEFAULT_TIMEOUT_MS = 5 * 60 * 1000L
 
-        /**
-         * Recent apt-get versions wait/retry on a contended dpkg lock by default instead of
-         * failing immediately — without this, a single stuck lock (from a leftover orphan, or a
-         * race with this same install batch's own earlier step) doesn't surface as the clear
-         * "Could not get lock" error seen in testing; it just silently eats each call's *entire*
-         * exec() timeout one command at a time. Across ~40 sequential apt-get calls in one
-         * install batch, that compounds into a hang lasting hours instead of a fast, visible
-         * failure. Bounding apt's own retry window keeps that within seconds.
-         */
+        /** Recent apt-get retries on a contended dpkg lock by default instead of failing fast;
+         * bounding it keeps a stuck lock from silently eating each call's whole timeout. */
         const val LOCK_TIMEOUT_OPT = "-o DPkg::Lock::Timeout=20"
     }
 }

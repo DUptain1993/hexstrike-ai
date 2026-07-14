@@ -12,7 +12,7 @@ import com.vulnrbot.app.MainActivity
 import com.vulnrbot.app.R
 
 /** Foreground service that keeps the process alive while a long-running tool (nmap, sqlmap,
- * hydra, ...) executes inside proot, so Android doesn't kill the app in the background. Started
+ * hydra, ...) executes inside the chroot, so Android doesn't kill the app in the background. Started
  * by AgentOrchestrator around each tool execution and stopped once the run completes. */
 class LinuxSessionService : Service() {
 

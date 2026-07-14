@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 class TerminalViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app get() = getApplication<VulnrBotApplication>()
-    private val session = LinuxInteractiveSession(app.linuxEnvironmentRepository.paths, viewModelScope)
+    private val session = LinuxInteractiveSession(app.linuxEnvironmentRepository.chroot, viewModelScope)
 
     val linuxState: StateFlow<LinuxEnvironmentState> = app.linuxEnvironmentRepository.state
 
