@@ -24,6 +24,13 @@ sealed interface StreamEvent {
  * Streams `POST chat/completions` with `stream: true` and hand-parses the
  * `text/event-stream` body (`data: {json}` lines, terminated by `data: [DONE]`)
  * since this shape doesn't fit Retrofit's request/response model.
+ *
+ * Venice doesn't always send SSE even when we ask for it: some models ignore `stream: true`
+ * and return a single non-streamed `{"choices":[{"message":...}]}` JSON body, and a rejected
+ * request can come back as HTTP 200 with a plain `{"error":...}` JSON body. Both cases used to
+ * be swallowed silently (no `data:` lines → nothing emitted → the UI showed no reply and no
+ * error), so this parser now treats a non-SSE body as a real response/error instead of dropping
+ * it, and surfaces decode failures rather than ignoring them.
  */
 class VeniceStreamingClient(private val httpClient: OkHttpClient) {
 
@@ -49,22 +56,50 @@ class VeniceStreamingClient(private val httpClient: OkHttpClient) {
                         return
                     }
                     val source = resp.body?.source()
+                    var sawSseData = false
+                    var emittedChunk = false
+                    var lastDecodeError: Throwable? = null
+                    val rawBody = StringBuilder()
                     try {
                         while (source != null && !source.exhausted()) {
                             val line = source.readUtf8Line() ?: break
-                            if (!line.startsWith("data:")) continue
+                            if (!line.startsWith("data:")) {
+                                // Buffer non-SSE lines (capped) so a non-streamed JSON body or a
+                                // plain JSON error can be recovered after the loop.
+                                if (rawBody.length < MAX_RAW_BODY) rawBody.append(line).append('\n')
+                                continue
+                            }
+                            sawSseData = true
                             val payload = line.removePrefix("data:").trim()
                             if (payload == "[DONE]") {
                                 trySend(StreamEvent.Completed)
-                                break
+                                close()
+                                return
                             }
                             if (payload.isEmpty()) continue
                             runCatching { veniceJson.decodeFromString<ChatCompletionResponse>(payload) }
                                 .onSuccess { parsed ->
-                                    parsed.choices.forEach { trySend(StreamEvent.Chunk(it)) }
+                                    parsed.choices.forEach { trySend(StreamEvent.Chunk(it.normalized())); emittedChunk = true }
                                 }
+                                .onFailure { lastDecodeError = it }
                         }
-                        trySend(StreamEvent.Completed)
+
+                        if (!sawSseData) {
+                            // The body was never SSE. Try to read it as a normal (non-streamed)
+                            // chat completion, then fall back to surfacing it as an error.
+                            handleNonSseBody(rawBody.toString())
+                        } else if (!emittedChunk && lastDecodeError != null) {
+                            trySend(
+                                StreamEvent.Failed(
+                                    VeniceApiException(
+                                        resp.code,
+                                        "Couldn't parse Venice's streamed response: ${lastDecodeError?.message}",
+                                    ),
+                                ),
+                            )
+                        } else {
+                            trySend(StreamEvent.Completed)
+                        }
                     } catch (e: IOException) {
                         trySend(StreamEvent.Failed(e))
                     } finally {
@@ -72,8 +107,38 @@ class VeniceStreamingClient(private val httpClient: OkHttpClient) {
                     }
                 }
             }
+
+            private fun handleNonSseBody(raw: String) {
+                val trimmed = raw.trim()
+                if (trimmed.isEmpty()) {
+                    trySend(StreamEvent.Failed(VeniceApiException(0, "Venice returned an empty response.")))
+                    return
+                }
+                val parsed = runCatching { veniceJson.decodeFromString<ChatCompletionResponse>(trimmed) }.getOrNull()
+                val choices = parsed?.choices.orEmpty()
+                if (choices.isNotEmpty() && choices.any { (it.message ?: it.delta)?.textOrNull()?.isNotBlank() == true || !it.message?.toolCalls.isNullOrEmpty() }) {
+                    choices.forEach { trySend(StreamEvent.Chunk(it.normalized())) }
+                    trySend(StreamEvent.Completed)
+                } else {
+                    // Not a usable completion — most likely a `{"error":...}` body returned as 200.
+                    trySend(
+                        StreamEvent.Failed(
+                            VeniceApiException(0, "Venice returned an unexpected response: ${trimmed.take(MAX_RAW_BODY)}"),
+                        ),
+                    )
+                }
+            }
         })
 
         awaitClose { call.cancel() }
     }
+
+    companion object {
+        private const val MAX_RAW_BODY = 2000
+    }
 }
+
+/** Normalizes a non-streamed choice (fields under `message`) into the streamed shape the rest of
+ * the pipeline reads (`delta`), so a model that ignores `stream: true` still renders. */
+private fun ChatChoice.normalized(): ChatChoice =
+    if (delta == null && message != null) copy(delta = message) else this
